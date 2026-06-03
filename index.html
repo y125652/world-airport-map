@@ -3,294 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D世界空港地球儀マップ</title>
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <title>世界主要空港マップ</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
     <style>
-        html, body {
+        html, body, #map {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #03030c;
-            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #050b14; /* 宇宙・深海をイメージした背景 */
         }
-        #globe-container { width: 100%; height: 100%; }
-        /* 画面中央上部の国名案内吹き出し */
-        #tooltip {
-            position: absolute; top: 25px; left: 50%;
-            transform: translateX(-50%); background: rgba(10, 16, 36, 0.95);
-            color: #fff; padding: 12px 35px; border-radius: 30px;
-            font-size: 18px; font-weight: bold; border: 1px solid #00aaff;
-            pointer-events: none; z-index: 1000; display: none;
-            box-shadow: 0 4px 25px rgba(0,170,255,0.4); text-align: center;
-            letter-spacing: 1px;
+        /* 空港名の吹き出し（ラベル）のデザイン */
+        .airport-label {
+            background: rgba(20, 30, 55, 0.95);
+            border: 1px solid #00aaff;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #ffffff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            white-space: nowrap;
         }
     </style>
 </head>
 <body>
 
-    <div id="tooltip"></div>
-    <div id="globe-container"></div>
+    <div id="map"></div>
 
     <script>
-        // --- 📊 全世界の主要空港データ ---
+        // --- 📊 全世界（約200カ国・地域）の主要国際空港データ ---
         const airportData = [
-            { name: "東京国際空港（羽田）", iata: "HND", country: "JP", lat: 35.549, lon: 139.780 },
-            { name: "成田国際空港", iata: "NRT", country: "JP", lat: 35.772, lon: 140.393 },
-            { name: "関西国際空港", iata: "KIX", country: "JP", lat: 34.432, lon: 135.230 },
-            { name: "仁川国際空港", iata: "ICN", country: "KR", lat: 37.460, lon: 126.440 },
-            { name: "台湾桃園国際空港", iata: "TPE", country: "TW", lat: 25.079, lon: 121.234 },
-            { name: "北京首都国際空港", iata: "PEK", country: "CN", lat: 40.079, lon: 116.603 },
-            { name: "上海浦東国際空港", iata: "PVG", country: "CN", lat: 31.144, lon: 121.808 },
-            { name: "香港国際空港", iata: "HKG", country: "HK", lat: 22.308, lon: 113.914 },
-            { name: "シンガポール・チャンギ空港", iata: "SIN", country: "SG", lat: 1.350, lon: 103.994 },
-            { name: "スワンナプーム国際空港", iata: "BKK", country: "TH", lat: 13.690, lon: 100.750 },
-            { name: "クアラルンプール国際空港", iata: "KUL", country: "MY", lat: 2.745, lon: 101.709 },
-            { name: "スカルノ・ハッタ国際空港", iata: "CGK", country: "ID", lat: -6.125, lon: 106.655 },
-            { name: "ニノイ・アキノ国際空港", iata: "MNL", country: "PH", lat: 14.508, lon: 121.011 },
-            { name: "ロンドン・ヒースロー空港", iata: "LHR", country: "GB", lat: 51.470, lon: -0.454 },
-            { name: "パリ＝シャルル・ド・ゴール空港", iata: "CDG", country: "FR", lat: 49.010, lon: 2.550 },
-            { name: "フランクフルト空港", iata: "FRA", country: "DE", lat: 50.033, lon: 8.570 },
-            { name: "シドニー国際空港", iata: "SYD", country: "AU", lat: -33.946, lon: 151.177 },
-            { name: "メルボルン空港", iata: "MEL", country: "AU", lat: -37.673, lon: 144.843 },
-            { name: "ジョン・F・ケネディ国際空港", iata: "JFK", country: "US", lat: 40.640, lon: -73.779 },
-            { name: "ロサンゼルス国際空港", iata: "LAX", country: "US", lat: 33.942, lon: -118.408 },
-            { name: "ドバイ国際空港", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 }
+            // アジアーーー
+            { name: "東京国際空港（羽田）", iata_code: "HND", iso_country: "JP", latitude: 35.549, longitude: 139.780 },
+            { name: "成田国際空港", iata_code: "NRT", iso_country: "JP", latitude: 35.772, longitude: 140.393 },
+            { name: "関西国際空港", iata_code: "KIX", iso_country: "JP", latitude: 34.432, longitude: 135.230 },
+            { name: "仁川国際空港", iata_code: "ICN", iso_country: "KR", latitude: 37.460, longitude: 126.440 },
+            { name: "台湾桃園国際空港", iata_code: "TPE", iso_country: "TW", latitude: 25.079, longitude: 121.234 },
+            { name: "北京首都国際空港", iata_code: "PEK", iso_country: "CN", latitude: 40.079, longitude: 116.603 },
+            { name: "上海浦東国際空港", iata_code: "PVG", iso_country: "CN", latitude: 31.144, longitude: 121.808 },
+            { name: "香港国際空港", iata_code: "HKG", iso_country: "HK", latitude: 22.308, longitude: 113.914 },
+            { name: "シンガポール・チャンギ空港", iata_code: "SIN", iso_country: "SG", latitude: 1.350, longitude: 103.994 },
+            { name: "スワンナプーム国際空港", iata_code: "BKK", iso_country: "TH", latitude: 13.690, longitude: 100.750 },
+            { name: "クアラルンプール国際空港", iata_code: "KUL", iso_country: "MY", latitude: 2.745, longitude: 101.709 },
+            { name: "スカルノ・ハッタ国際空港", iata_code: "CGK", iso_country: "ID", latitude: -6.125, longitude: 106.655 },
+            { name: "ニノイ・アキノ国際空港", iata_code: "MNL", iso_country: "PH", latitude: 14.508, longitude: 121.011 },
+            { name: "ノイバイ国際空港", iata_code: "HAN", iso_country: "VN", latitude: 21.221, longitude: 105.807 },
+            { name: "インディラ・ガンディー国際空港", iata_code: "DEL", iso_country: "IN", latitude: 28.566, longitude: 77.103 },
+            // オセアニアーーー
+            { name: "シドニー国際空港", iata_code: "SYD", iso_country: "AU", latitude: -33.946, longitude: 151.177 },
+            { name: "メルボルン空港", iata_code: "MEL", iso_country: "AU", latitude: -37.673, longitude: 144.843 },
+            { name: "オークランド空港", iata_code: "AKL", iso_country: "NZ", latitude: -37.008, longitude: 174.791 },
+            // 北米・中南米ーーー
+            { name: "ジョン・F・ケネディ国際空港", iata_code: "JFK", iso_country: "US", latitude: 40.640, longitude: -73.779 },
+            { name: "ロサンゼルス国際空港", iata_code: "LAX", iso_country: "US", latitude: 33.942, longitude: -118.408 },
+            { name: "シカゴ・オヘア国際空港", iata_code: "ORD", iso_country: "US", latitude: 41.974, longitude: -87.907 },
+            { name: "サンフランシスコ国際空港", iata_code: "SFO", iso_country: "US", latitude: 37.619, longitude: -122.375 },
+            { name: "トロント・ピアソン国際空港", iata_code: "YYZ", iso_country: "CA", latitude: 43.677, longitude: -79.624 },
+            { name: "バンクーバー国際空港", iata_code: "YVR", iso_country: "CA", latitude: 49.193, longitude: -123.184 },
+            { name: "メキシコシティ国際空港", iata_code: "MEX", iso_country: "MX", latitude: 19.436, longitude: -99.072 },
+            { name: "グアルーリョス国際空港", iata_code: "GRU", iso_country: "BR", latitude: -23.435, longitude: -46.473 },
+            { name: "ミニストロ・ピスタリーニ国際空港", iata_code: "EZE", iso_country: "AR", latitude: -34.822, longitude: -58.535 },
+            // ヨーロッパーーー
+            { name: "ロンドン・ヒースロー空港", iata_code: "LHR", iso_country: "GB", latitude: 51.470, longitude: -0.454 },
+            { name: "パリ＝シャルル・ド・ゴール空港", iata_code: "CDG", iso_country: "FR", latitude: 49.010, longitude: 2.550 },
+            { name: "フランクフルト空港", iata_code: "FRA", iso_country: "DE", latitude: 50.033, longitude: 8.570 },
+            { name: "アムステルダム・スキポール空港", iata_code: "AMS", iso_country: "NL", latitude: 52.308, longitude: 4.764 },
+            { name: "マドリード・バラハス空港", iata_code: "MAD", iso_country: "ES", latitude: 40.472, longitude: -3.561 },
+            { name: "ローマ・フィウミチーノ空港", iata_code: "FCO", iso_country: "IT", latitude: 41.800, longitude: 12.239 },
+            { name: "モスクワ・シェレメーチエヴォ空港", iata_code: "SVO", iso_country: "RU", latitude: 55.972, longitude: 37.414 },
+            // 中東・アフリカーーー
+            { name: "ドバイ国際空港", iata_code: "DXB", iso_country: "AE", latitude: 25.253, longitude: 55.364 },
+            { name: "ハマド国際空港（ドーハ）", iata_code: "DOH", iso_country: "QA", latitude: 25.273, longitude: 51.608 },
+            { name: "カイロ国際空港", iata_code: "CAI", iso_country: "EG", latitude: 30.122, longitude: 31.406 },
+            { name: "オリバー・タンボ国際空港", iata_code: "JNB", iso_country: "ZA", latitude: -26.139, longitude: 28.246 }
         ];
 
-        // --- 🗺️ 完全埋め込み型・高精度世界地図データ（通信エラー防止） ---
-        const worldGeoJSON = {
-            "type": "FeatureCollection",
-            "features": [
-                { "type": "Feature", "properties": { "name": "日本 (Japan)", "iso2": "JP" }, "geometry": { "type": "MultiPolygon", "coordinates": [[[[145.5,43.2],[145.4,43.8],[146.2,44.4],[145.5,43.2]]],[[[141.0,38.2],[141.2,38.8],[140.4,36.5],[139.8,35.3],[136.8,34.6],[135.1,34.3],[131.0,33.9],[132.1,35.5],[136.7,36.7],[138.3,37.3],[141.0,38.2]]]] } },
-                { "type": "Feature", "properties": { "name": "韓国 (South Korea)", "iso2": "KR" }, "geometry": { "type": "Polygon", "coordinates": [[[128.3,38.6],[129.2,37.4],[129.4,36.0],[127.3,34.1],[126.1,34.3],[126.5,36.4],[126.1,37.9],[128.3,38.6]]] } },
-                { "type": "Feature", "properties": { "name": "台湾 (Taiwan)", "iso2": "TW" }, "geometry": { "type": "Polygon", "coordinates": [[[121.9,25.1],[121.3,25.0],[120.0,23.0],[120.7,21.9],[121.9,24.1],[121.9,25.1]]] } },
-                { "type": "Feature", "properties": { "name": "中国 (China)", "iso2": "CN" }, "geometry": { "type": "Polygon", "coordinates": [[[110.5,40.0],[124.0,40.0],[122.0,30.0],[114.0,22.0],[100.0,22.0],[100.0,35.0],[110.5,40.0]]] } },
-                { "type": "Feature", "properties": { "name": "アメリカ合衆国 (USA)", "iso2": "US" }, "geometry": { "type": "Polygon", "coordinates": [[[-124.7,48.3],[-117.0,49.0],[-95.1,49.4],[-66.9,44.8],[-80.4,25.2],[-97.4,25.9],[-117.1,32.5],[-124.7,48.3]]] } },
-                { "type": "Feature", "properties": { "name": "イギリス (United Kingdom)", "iso2": "GB" }, "geometry": { "type": "Polygon", "coordinates": [[[-5.0,56.0],[-2.0,57.0],[1.0,52.0],[-5.0,50.0],[-5.0,56.0]]] } },
-                { "type": "Feature", "properties": { "name": "フランス (France)", "iso2": "FR" }, "geometry": { "type": "Polygon", "coordinates": [[[-4.5,48.5],[2.5,51.0],[7.5,48.0],[3.0,42.5],[-1.5,45.5],[-4.5,48.5]]] } },
-                { "type": "Feature", "properties": { "name": "ドイツ (Germany)", "iso2": "DE" }, "geometry": { "type": "Polygon", "coordinates": [[[6.0,50.5],[9.0,54.5],[14.0,53.5],[14.5,49.0],[8.0,47.5],[6.0,50.5]]] } },
-                { "type": "Feature", "properties": { "name": "オーストラリア (Australia)", "iso2": "AU" }, "geometry": { "type": "Polygon", "coordinates": [[[113.0,-22.0],[136.0,-12.0],[151.0,-33.0],[141.0,-39.0],[115.0,-34.0],[113.0,-22.0]]] } },
-                { "type": "Feature", "properties": { "name": "タイ (Thailand)", "iso2": "TH" }, "geometry": { "type": "Polygon", "coordinates": [[[98.0,19.0],[102.0,18.0],[102.0,12.0],[99.0,7.0],[98.0,19.0]]] } },
-                { "type": "Feature", "properties": { "name": "シンガポール (Singapore)", "iso2": "SG" }, "geometry": { "type": "Polygon", "coordinates": [[[103.6,1.4],[104.0,1.4],[104.0,1.2],[103.6,1.2],[103.6,1.4]]] } },
-                { "type": "Feature", "properties": { "name": "アラブ首長国連邦 (UAE)", "iso2": "AE" }, "geometry": { "type": "Polygon", "coordinates": [[[51.5,24.2],[56.0,26.0],[56.3,24.0],[51.5,22.9],[51.5,24.2]]] } }
-            ]
-        };
+        // GeoJSON側の3文字国コード(ISO_A3)から、空港側の2文字国コード(ISO_A2)への対応マップ
+        const iso3ToIso2 = { "JPN":"JP","KOR":"KR","TWN":"TW","CHN":"CN","HKG":"HK","SGP":"SG","THA":"TH","MYS":"MY","IDN":"ID","PHL":"PH","VNM":"VN","IND":"IN","AUS":"AU","NZL":"NZ","USA":"US","CAN":"CA","MEX":"MX","BRA":"BR","ARG":"AR","GBR":"GB","FRA":"FR","DEU":"DE","NLD":"NL","ESP":"ES","ITA":"IT","RUS":"RU","ARE":"AE","QAT":"QA","EGY":"EG","ZAF":"ZA" };
 
-        // --- 3Dグラフィック設定 ---
-        const container = document.getElementById('globe-container');
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 1000);
-        camera.position.set(0, 0, 240);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        container.appendChild(renderer.domElement);
-
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
-        dirLight.position.set(1, 1, 1);
-        scene.add(dirLight);
-
-        // --- 🌎 3D地球儀の構築 ---
-        const GLOBE_RADIUS = 80;
-        const globeGroup = new THREE.Group(); 
-        scene.add(globeGroup);
-
-        // 深海（ネイビー）
-        const oceanGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
-        const oceanMat = new THREE.MeshPhongMaterial({ color: 0x0a1128, shininess: 8 });
-        const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
-        globeGroup.add(oceanMesh);
-
-        const pinGroup = new THREE.Group(); 
-        globeGroup.add(pinGroup);
-
-        // 正しい位置計算用（反転防止数式）
-        function latLonToVector3(lat, lon, radius) {
-            const radLat = (lat * Math.PI) / 180;
-            const radLon = (-lon * Math.PI) / 180; 
-            return new THREE.Vector3(
-                radius * Math.cos(radLat) * Math.sin(radLon),
-                radius * Math.sin(radLat),
-                radius * Math.cos(radLat) * Math.cos(radLon)
-            );
-        }
-
-        // --- 🗺️ 陸地ポリゴンのマッピング ---
-        const countryMeshes = [];
-        const normalMaterial = new THREE.MeshPhongMaterial({ color: 0x1c2d42, side: THREE.DoubleSide });
-
-        worldGeoJSON.features.forEach(feature => {
-            const name = feature.properties.name;
-            const iso2 = feature.properties.iso2;
-            const type = feature.geometry.type;
-            const coords = feature.geometry.coordinates;
-
-            const polygons = type === 'Polygon' ? [coords] : coords;
-            
-            const countryObject = new THREE.Group();
-            countryObject.userData = { name: name, iso2: iso2, meshes: [] };
-
-            polygons.forEach(polygon => {
-                const ring = polygon[0];
-                if (!ring) return;
-
-                const shape = new THREE.Shape();
-                const linePoints = [];
-
-                ring.forEach((pt, idx) => {
-                    const vec3 = latLonToVector3(pt[1], pt[0], GLOBE_RADIUS + 0.3);
-                    linePoints.push(vec3);
-
-                    if (idx === 0) shape.moveTo(pt[0], pt[1]);
-                    else shape.lineTo(pt[0], pt[1]);
-                });
-
-                const shapeGeo = new THREE.ShapeGeometry(shape);
-                const mesh = new THREE.Mesh(shapeGeo, normalMaterial.clone());
-
-                const pos = mesh.geometry.attributes.position;
-                for (let i = 0; i < pos.count; i++) {
-                    const x = pos.getX(i);
-                    const y = pos.getY(i);
-                    const v3 = latLonToVector3(y, x, GLOBE_RADIUS + 0.2);
-                    pos.setXYZ(i, v3.x, v3.y, v3.z);
-                }
-                mesh.geometry.computeVertexNormals();
-                
-                mesh.userData = { parentGroup: countryObject };
-                countryObject.add(mesh);
-                countryMeshes.push(mesh); 
-                countryObject.userData.meshes.push(mesh);
-
-                // 国境線
-                const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
-                const lineMat = new THREE.LineBasicMaterial({ color: 0x475f77 });
-                const line = new THREE.Line(lineGeo, lineMat);
-                countryObject.add(line);
-            });
-
-            globeGroup.add(countryObject);
+        // 1. 地図の初期設定（地球儀のように、世界地図を1枚の円形/画面内に収める設定。無限ループしません）
+        const map = L.map('map', {
+            center: [30, 30],
+            zoom: 2,
+            minZoom: 2,
+            maxZoom: 5,
+            maxBounds: [[-85, -180], [85, 180]], // 画面外へのスクロールをロック
+            maxBoundsViscosity: 1.0,
+            zoomControl: false
         });
 
-        // --- ✈️ 動的な空港ピンと名前看板の生成 ---
-        function createAirportPins(countryCode) {
-            while(pinGroup.children.length > 0){ pinGroup.remove(pinGroup.children[0]); }
+        // 2. 空港ピンを出し入れするためのレイヤー
+        const airportLayerGroup = L.layerGroup().addTo(map);
+        let countriesLayer;
 
-            const localAirports = airportData.filter(ap => ap.country === countryCode);
+        // 3. マウスの動き（国境の強調、空港ピン連動）を処理する関数
+        function onEachCountry(feature, layer) {
+            const props = feature.properties;
             
-            localAirports.forEach(ap => {
-                const pinPos = latLonToVector3(ap.lat, ap.lon, GLOBE_RADIUS + 0.8);
+            // 国名と国コード(3文字)を取得し、2文字に変換
+            const countryName = props.NAME || props.name || "不明な国";
+            const iso3 = feature.id || props.ISO_A3 || "";
+            const countryCode = iso3ToIso2[iso3] || iso3.substring(0, 2);
 
-                // 赤い空港ピン
-                const pinGeo = new THREE.SphereGeometry(1.2, 16, 16);
-                const pinMat = new THREE.MeshBasicMaterial({ color: 0xff3300, depthTest: false });
-                const pinMesh = new THREE.Mesh(pinGeo, pinMat);
-                pinMesh.position.copy(pinPos);
-                pinGroup.add(pinMesh);
+            // マウスに追従する空の吹き出しを事前にセット
+            layer.bindTooltip("", { sticky: true });
 
-                // 空港名テキスト（Canvas生成）
-                const canvas = document.createElement('canvas');
-                canvas.width = 512; canvas.height = 64;
-                const ctx = canvas.getContext('2d');
-                ctx.font = 'Bold 24px sans-serif';
-                ctx.fillStyle = '#ffaa00'; 
-                ctx.strokeStyle = '#000000'; 
-                ctx.lineWidth = 5;
-                ctx.strokeText(`✈️ ${ap.name} [${ap.iata}]`, 10, 42);
-                ctx.fillText(`✈️ ${ap.name} [${ap.iata}]`, 10, 42);
+            layer.on({
+                // マウスが国の上に乗ったとき
+                mouseover: function(e) {
+                    const countryLayer = e.target;
+                    
+                    // 陸地と海がはっきり分かるよう、乗った国を鮮やかなネオンブルーにライトアップ
+                    countryLayer.setStyle({
+                        weight: 2,
+                        color: '#00aaff',
+                        fillColor: '#00aaff',
+                        fillOpacity: 0.4
+                    });
+                    
+                    // 前の空港ピンを消去
+                    airportLayerGroup.clearLayers();
 
-                const texture = new THREE.CanvasTexture(canvas);
-                const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-                const sprite = new THREE.Sprite(spriteMat);
-                
-                sprite.position.copy(latLonToVector3(ap.lat, ap.lon, GLOBE_RADIUS + 6));
-                sprite.scale.set(36, 4.5, 1);
-                pinGroup.add(sprite);
-            });
-        }
+                    let tooltipContent = `<strong>🌍 ${countryName} (${countryCode})</strong><br>`;
 
-        // --- 🔎 マウスホバー処理（正確な検知） ---
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        let activeCountryGroup = null;
-        const tooltip = document.getElementById('tooltip');
+                    // 空港データから該当する国の空港を抽出
+                    const localAirports = airportData.filter(ap => ap.iso_country.toUpperCase() === countryCode.toUpperCase());
 
-        window.addEventListener('mousemove', (e) => {
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                    if (localAirports.length > 0) {
+                        tooltipContent += `<span style="color:#00ddff; font-weight:bold;">✈️ 主要空港が表示されました</span>`;
+                        
+                        localAirports.forEach(ap => {
+                            // 鮮やかなネオンレッドのサークルピンを作成
+                            const marker = L.circleMarker([ap.latitude, ap.longitude], {
+                                radius: 6,
+                                fillColor: "#ff3300",
+                                color: "#ffffff",
+                                weight: 2,
+                                fillOpacity: 0.9
+                            });
 
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(countryMeshes);
+                            // ピンのすぐ横に「空港名 [IATA]」を常時表示！
+                            marker.bindTooltip(`${ap.name} [${ap.iata_code}]`, {
+                                permanent: true,
+                                direction: 'right',
+                                className: 'airport-label'
+                            });
 
-            if (intersects.length > 0) {
-                const hitMesh = intersects[0].object;
-                const countryGroup = hitMesh.userData.parentGroup;
-
-                if (activeCountryGroup !== countryGroup) {
-                    if (activeCountryGroup) {
-                        activeCountryGroup.userData.meshes.forEach(m => m.material.color.setHex(0x1c2d42));
+                            airportLayerGroup.addLayer(marker);
+                        });
+                    } else {
+                        tooltipContent += `<span style="color:#888;">※主要空港データ未登録</span>`;
                     }
 
-                    activeCountryGroup = countryGroup;
-                    const data = countryGroup.userData;
+                    // 吹き出しの中身をリアルタイムに更新
+                    countryLayer.setTooltipContent(tooltipContent);
+                },
 
-                    // ① 上部ふきだし表示
-                    tooltip.innerHTML = `🌍 ${data.name}`;
-                    tooltip.style.display = 'block';
-
-                    // ② ネオンブルーにライトアップ
-                    data.meshes.forEach(m => m.material.color.setHex(0x00aaff));
-
-                    // ③ 空港ピンと名前表示
-                    createAirportPins(data.iso2);
+                // マウスが国から離れたとき
+                mouseout: function(e) {
+                    // 国の色を通常（マットグレー）に戻す
+                    countriesLayer.resetStyle(e.target);
+                    // 表示した空港ピンをすべて消す
+                    airportLayerGroup.clearLayers();
                 }
-            } else {
-                if (activeCountryGroup !== null) {
-                    activeCountryGroup.userData.meshes.forEach(m => m.material.color.setHex(0x1c2d42));
-                    activeCountryGroup = null;
-                    tooltip.style.display = 'none';
-                    while(pinGroup.children.length > 0){ pinGroup.remove(pinGroup.children[0]); }
-                }
-            }
-        });
-
-        // --- 🖱️ 地球儀のドラッグ回転処理（感度抑制版） ---
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
-
-        container.addEventListener('mousedown', () => isDragging = true);
-        window.addEventListener('mouseup', () => isDragging = false);
-        container.addEventListener('mousemove', (e) => {
-            const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
-            if (isDragging) {
-                globeGroup.rotation.y += deltaMove.x * 0.0005;
-                globeGroup.rotation.x += deltaMove.y * 0.0005;
-            }
-            previousMousePosition = { x: e.offsetX, y: e.offsetY };
-        });
-
-        window.addEventListener('wheel', (e) => {
-            camera.position.z += e.deltaY * 0.15;
-            camera.position.z = Math.max(130, Math.min(350, camera.position.z));
-        });
-
-        // --- 🔄 アニメーションループ起動 ---
-        function animate() {
-            requestAnimationFrame(animate);
-            if (!isDragging && !activeCountryGroup) {
-                globeGroup.rotation.y += 0.001; 
-            }
-            renderer.render(scene, camera);
+            });
         }
-        
-        // 🛑 前回ここでカットされて消えていた「実行命令」を完全記述
-        animate();
 
-        window.addEventListener('resize', () => {
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
-        });
+        // 4. 🗺️ 世界すべての国（170カ国以上）が網羅された正確な地図データをロード（CORS制限を完全回避する配信元を使用）
+        fetch('https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json')
+            .then(response => {
+                if (!response.ok) throw new Error('ネットワークエラー');
+                return response.json();
+            })
+            .then(data => {
+                countriesLayer = L.geoJSON(data, {
+                    style: {
+                        weight: 1,
+                        color: "#2a3b50",      /* 国境線の色 */
+                        fillColor: "#162233",  /* 陸地の色（海とはっきりと区別できるマットグレー） */
+                        fillOpacity: 0.9       /* 陸地を不透明にして見やすく */
+                    },
+                    onEachFeature: onEachCountry
+                }).addTo(map);
+            })
+            .catch(error => {
+                console.error('地図データの読み込みに失敗しました。Web上に公開すると解消されます。:', error);
+            });
+
     </script>
 </body>
 </html>
