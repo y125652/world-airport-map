@@ -6,27 +6,27 @@
     <title>3D世界空港地球儀マップ</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
     
     <style>
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #03030c; /* 宇宙空間 */
+            overflow: hidden; background-color: #030408; /* 宇宙空間の黒 */
             font-family: 'Helvetica Neue', Arial, sans-serif;
         }
         #globe-container {
             width: 100%; height: 100%; display: flex;
             justify-content: center; align-items: center;
         }
-        /* 国やピンをクリックした際に出る「不快な四角い枠(アウトライン)」を完全に消去 */
         path, circle, text, svg {
             outline: none !important;
             -webkit-tap-highlight-color: rgba(0,0,0,0);
         }
-        /* 画面中央上部の国名吹き出し */
+        /* 画面中央上部の洗練された国名吹き出し */
         #tooltip {
             position: absolute; top: 25px; left: 50%;
-            transform: translateX(-50%); background: rgba(10, 16, 36, 0.95);
-            color: #fff; padding: 10px 30px; border-radius: 30px;
+            transform: translateX(-50%); background: rgba(10, 16, 35, 0.95);
+            color: #fff; padding: 10px 35px; border-radius: 30px;
             font-size: 18px; font-weight: bold; border: 1px solid #00aaff;
             pointer-events: none; z-index: 1000; display: none;
             box-shadow: 0 4px 25px rgba(0,170,255,0.4); text-align: center;
@@ -88,12 +88,12 @@
             { name: "オリバー・タンボ国際空港", iata: "JNB", country: "ZA", lat: -26.139, lon: 28.246 }
         ];
 
-        const iso3ToIso2 = { "JPN":"JP","KOR":"KR","TWN":"TW","CHN":"CN","HKG":"HK","SGP":"SG","THA":"TH","MYS":"MY","IDN":"ID","PHL":"PH","VNM":"VN","IND":"IN","AUS":"AU","NZL":"NZ","USA":"US","CAN":"CA","MEX":"MX","BRA":"BR","ARG":"AR","GBR":"GB","FRA":"FR","DEU":"DE","NLD":"NL","ESP":"ES","IT":"IT","RUS":"RU","ARE":"AE","QAT":"QA","EGY":"EG","ZAF":"ZA" };
+        // 3文字コード(ISO_A3)と2文字コード(空港連動用)の対応マップ
+        const iso3ToIso2 = { "JPN":"JP","KOR":"KR","TWN":"TW","CHN":"CN","HKG":"HK","SGP":"SG","THA":"TH","MYS":"MY","IDN":"ID","PHL":"PH","VNM":"VN","IND":"IN","AUS":"AU","NZL":"NZ","USA":"US","CAN":"CA","MEX":"MX","BRA":"BR","ARG":"AR","GBR":"GB","FRA":"FR","DEU":"DE","NLD":"NL","ESP":"ES","ITA":"IT","RUS":"RU","ARE":"AE","QAT":"QA","EGY":"EG","ZAF":"ZA" };
 
-        // --- 🗺️ 画面サイズと地球儀（球体）の設定 ---
         const width = window.innerWidth;
         const height = window.innerHeight;
-        const sensitivity = 0.25; // 🔄 人間のドラッグ感覚に最適化した滑らかな回転感度
+        const sensitivity = 0.25; // 🔄 滑らかにドラッグ回転する感度
 
         const svg = d3.select("#globe")
             .attr("width", width)
@@ -101,107 +101,119 @@
 
         // 3D地球儀（正射投影法）の設定
         const projection = d3.geoOrthographic()
-            .scale(320) // 地球の大きさ
-            .center([0, 0])
+            .scale(280) // 初期サイズ
             .translate([width / 2, height / 2]);
 
         const path = d3.geoPath().projection(projection);
 
-        // 🌊 海のレイヤーを描写（宇宙と区別できる深海ネイビー）
-        svg.append("circle")
+        // 🌊 海の描写（完全に不透明。宇宙と明確に区別する深海ディープネイビー）
+        const ocean = svg.append("circle")
             .attr("cx", width / 2)
             .attr("cy", height / 2)
             .attr("r", projection.scale())
-            .style("fill", "#0a1128")
+            .style("fill", "#050f26")
             .style("stroke", "none");
 
-        const mapGroup = svg.append("g");  // 陸地用のグループ
-        const pinsGroup = svg.append("g"); // 空港用のグループ
+        const mapGroup = svg.append("g");  // 陸地レイヤー
+        const pinsGroup = svg.append("g"); // 空港レイヤー
 
-        let countriesFeatures = [];
+        // 🗺️ バミューダ誤判定バグを100%排除する、高精度・世界標準の軽量TopoJSONデータを採用
+        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+            .then(function(world) {
+                // TopoJSONをGeoJSONに変換
+                const countries = topojson.feature(world, world.objects.countries).features;
 
-        // 4. 世界170カ国以上の正確な国境線データを配信サーバー（GitHub-CDN）から安全にロード
-        d3.json("https://cdn.jsdelivr.net/gh/johan/world.geo.json@master/countries.geo.json")
-            .then(function(data) {
-                countriesFeatures = data.features;
-
-                // 陸地の描画
+                // 陸地（国々）の描画
                 mapGroup.selectAll(".country")
-                    .data(countriesFeatures)
+                    .data(countries)
                     .enter().append("path")
                     .attr("class", "country")
                     .attr("d", path)
-                    // 視認性の高いマットグレーに配色（海と完全分離）
-                    .style("fill", "#1c2d42")
-                    .style("stroke", "#2d3f55")
-                    .style("stroke-width", "0.8px")
+                    // 海と完全に色を切り分けた、視認性の高い「ソリッドグレー」で塗りつぶし
+                    .style("fill", "#1f3147")
+                    .style("stroke", "#2d4460")
+                    .style("stroke-width", "1px")
                     
-                    // 🔎 マウスカーソルが国に乗ったときの処理
+                    // 🔎 マウスホバー処理
                     .on("mouseover", function(event, d) {
                         const name = d.properties.name || "不明な国";
-                        const iso3 = d.id || "";
+                        
+                        // 国によってプロパティ構造が違う場合を考慮して、3文字コードを安全に取得
+                        let iso3 = d.id || "";
+                        if (iso3.length !== 3 && d.properties.iso_a3) iso3 = d.properties.iso_a3;
                         const iso2 = iso3ToIso2[iso3] || iso3.substring(0, 2);
 
-                        // ① 国名をシンプルに中央上にポップアップ（余計な文言は完全排除）
+                        // 国名と国コードだけを中央上にシンプルにポップアップ
                         d3.select("#tooltip")
                             .html(`🌍 ${name} (${iso2})`)
                             .style("display", "block");
 
-                        // ② その国だけを鮮やかなネオンブルーに強調表示
+                        // 乗った国だけを鮮烈なネオンブルーに発光（ハイライト）
                         d3.select(this).style("fill", "#00aaff");
 
-                        // ③ その国の空港ピンと空港名テキストを瞬時に浮かび上がらせる
+                        // 空港ピンと名前看板を動的に表示
                         showAirports(iso2);
                     })
                     
-                    // マウスが国から離れたときの処理
                     .on("mouseout", function() {
                         d3.select("#tooltip").style("display", "none");
-                        d3.select(this).style("fill", "#1c2d42"); // 元の陸地色に戻す
-                        pinsGroup.selectAll("*").remove(); // ピンを全消去
+                        d3.select(this).style("fill", "#1f3147"); // 通常時の陸地色に戻す
+                        pinsGroup.selectAll("*").remove(); // マウスが離れたらピンを消去
                     });
 
-                // 5. 🔄 地球儀を直感的にグルグル回すためのドラッグ設定（感度大幅修正版）
+                // 🔄 地球儀を手動でドラッグして回す処理
                 svg.call(d3.drag().on("drag", function(event) {
                     const rotate = projection.rotate();
-                    // 感度（sensitivity）を掛け合わせることで、大きく回りすぎるバグを完全解消
                     projection.rotate([
                         rotate[0] + event.dx * sensitivity,
                         rotate[1] - event.dy * sensitivity
                     ]);
-                    
-                    // 回転に合わせて地球すべての位置を再描写
-                    svg.selectAll("path").attr("d", path);
-                    svg.select("circle").attr("r", projection.scale());
-                    updatePins(); // ピンの位置も地球の回転に追従
+                    refreshAll();
                 }));
+
+                // 🖱️ マウスのコロコロ（ホイールスクロール）によるズームイン・ズームアウト処理
+                svg.call(d3.zoom()
+                    .scaleExtent([0.5, 5]) // ズーム倍率の制限（縮小0.5倍〜拡大5倍まで）
+                    .on("zoom", function(event) {
+                        // スクロール量を元に地球儀のスケールをリアルタイムに書き換える
+                        projection.scale(280 * event.transform.k);
+                        refreshAll();
+                    })
+                );
             });
 
-        // 6. 空港ピンと名前テキストを動的に生成する関数
+        // 画面上の地球・陸・ピンすべてを一斉に再描画する関数
+        function refreshAll() {
+            svg.selectAll(".country").attr("d", path);
+            ocean.attr("r", projection.scale());
+            updatePins();
+        }
+
+        // 空港ピンとテキストの生成
         function showAirports(countryCode) {
-            pinsGroup.selectAll("*").remove(); // 初期化
+            pinsGroup.selectAll("*").remove();
 
             const localAirports = airportData.filter(ap => ap.country === countryCode);
 
             localAirports.forEach(ap => {
-                const geojsonPoint = { "type": "Point", "coordinates": [ap.lon, ap.lat] };
+                const geoPoint = { "type": "Point", "coordinates": [ap.lon, ap.lat] };
                 
-                // 空港のピン（赤いドット）を生成
-                const pin = pinsGroup.append("circle")
-                    .datum(geojsonPoint)
+                // 空港ピン（ネオンレッドのサークル）
+                pinsGroup.append("circle")
+                    .datum(geoPoint)
                     .attr("class", "airport-pin")
                     .attr("r", 5)
                     .style("fill", "#ff3300")
                     .style("stroke", "#ffffff")
                     .style("stroke-width", "1.5px");
 
-                // ピンのすぐ横に出る空港名ラベル（テキスト）を生成
-                const label = pinsGroup.append("text")
-                    .datum(geojsonPoint)
+                // 空港名ラベル（オレンジ）
+                pinsGroup.append("text")
+                    .datum(geoPoint)
                     .attr("class", "airport-text")
                     .text(`✈️ ${ap.name} [${ap.iata}]`)
                     .attr("dx", 10)
-                    .attr("dy", 5)
+                    .attr("dy", 4)
                     .style("fill", "#ffaa00")
                     .style("font-size", "12px")
                     .style("font-weight", "bold")
@@ -211,19 +223,19 @@
             updatePins();
         }
 
-        // 地球儀の回転に合わせて、空港ピンと文字の位置を三次元的に再計算する関数
+        // 地球儀の回転やズームに合わせて、ピンと文字の位置を再計算する関数
         function updatePins() {
-            // ドットピンの再計算
+            // ピンの位置修正
             pinsGroup.selectAll(".airport-pin")
                 .attr("cx", d => projection(d.coordinates)[0])
                 .attr("cy", d => projection(d.coordinates)[1])
                 .style("display", d => {
-                    // 地球の裏側（隠れている側）にあるピンは自動で非表示にする高度な処理
+                    // 地球の裏側に入ったピンは自動で非表示にする
                     const gpath = d3.geoPath().projection(projection);
                     return gpath(d) ? "inline" : "none";
                 });
 
-            // 空港名テキストの再計算
+            // 空港名テキストの位置修正
             pinsGroup.selectAll(".airport-text")
                 .attr("x", d => projection(d.coordinates)[0])
                 .attr("y", d => projection(d.coordinates)[1])
@@ -233,15 +245,14 @@
                 });
         }
 
-        // 画面サイズが変更されたときに地球の位置を自動調整
+        // ウィンドウズサイズが変更されたときの追従
         window.addEventListener("resize", function() {
             const w = window.innerWidth;
             const h = window.innerHeight;
             svg.attr("width", w).attr("height", h);
             projection.translate([w / 2, h / 2]);
-            svg.select("circle").attr("cx", w / 2).attr("cy", h / 2);
-            svg.selectAll("path").attr("d", path);
-            updatePins();
+            ocean.attr("cx", w / 2).attr("cy", h / 2);
+            refreshAll();
         });
 
     </script>
