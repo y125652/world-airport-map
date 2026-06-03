@@ -63,7 +63,7 @@
         globeGroup.add(sphere);
 
         const cargoAirports = [
-            // アジア・オセアニア
+            // アジアー・オセアニア
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
             { name: "香港国際空港 (HKG)", country: "香港", lat: 22.3080, lng: 113.9185 },
@@ -133,7 +133,7 @@
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7017, lng: -74.1469 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホル豪・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "フアン・サンタマリア国際空港 (SJO)", country: "コスタリカ", lat: 9.9939, lng: -84.2089 },
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
@@ -152,7 +152,8 @@
 
         const countryMeshes = [];
 
-        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+        // 2レターコード（ISO_A2）が確実に格納されているGeoJSONソースへ変更
+        fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
@@ -167,8 +168,9 @@
                     const type = feature.geometry.type;
                     const coordinates = feature.geometry.coordinates;
                     
-                    // プロパティ名がデータソースによって異なる問題(ADMIN or NAME or name)に対応
-                    const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name || "Unknown";
+                    // Natural Earthデータのプロパティ名（NAME_JAがあれば日本語、なければNAME）
+                    const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
+                    // 2レターコードプロパティ(ISO_A2)を取得
                     const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
 
                     if (type === 'Polygon') {
