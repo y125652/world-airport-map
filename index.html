@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D World Map - TC Areas & Airports</title>
+    <title>3D World Map - Lightweight Version</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         #globeViz { width: 100vw; height: 100vh; }
-        /* ツールチップ（ホバー時の情報表示）のスタイル */
         .backdrop { background: rgba(0, 0, 0, 0.85) !important; border-radius: 8px !important; padding: 12px !important; border: 1px solid #555; color: #fff; }
         .tt-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; border-bottom: 1px solid #aaa; padding-bottom: 4px; }
-        .tt-body { font-size: 12px; max-height: 200px; overflow-y: auto; }
+        .tt-body { font-size: 12px; }
     </style>
     <script src="//unpkg.com/globe.gl"></script>
 </head>
@@ -19,27 +18,21 @@
     <div id="globeViz"></div>
 
     <script>
-        // --- 1. TC（Target Conference）エリアの定義 ---
-        // TC1: 南北アメリカ, TC2: 欧州・アフリカ・中東, TC3: アジア・オセアニア
-        // ※主要国の簡易マッピング（必要に応じて追加してください）
+        // TCエリアの定義
         const tcMapping = {
-            // TC1
             'US': 'TC1', 'CA': 'TC1', 'BR': 'TC1', 'MX': 'TC1', 'AR': 'TC1', 'CO': 'TC1', 'PE': 'TC1',
-            // TC2
             'GB': 'TC2', 'FR': 'TC2', 'DE': 'TC2', 'IT': 'TC2', 'ES': 'TC2', 'ZA': 'TC2', 'EG': 'TC2', 'RU': 'TC2', 'SA': 'TC2', 'AE': 'TC2',
-            // TC3
             'JP': 'TC3', 'CN': 'TC3', 'KR': 'TC3', 'IN': 'TC3', 'AU': 'TC3', 'SG': 'TC3', 'TH': 'TC3', 'ID': 'TC3', 'MY': 'TC3', 'NZ': 'TC3'
         };
 
         const tcColors = {
-            'TC1': 'rgba(46, 204, 113, 0.6)',  // 緑
-            'TC2': 'rgba(52, 152, 219, 0.6)',  // 青
-            'TC3': 'rgba(241, 196, 15, 0.6)',  // 黄
-            'Unknown': 'rgba(155, 135, 135, 0.4)' // 未定義の国
+            'TC1': 'rgba(46, 204, 113, 0.5)',  // 緑
+            'TC2': 'rgba(52, 152, 219, 0.5)',  // 青
+            'TC3': 'rgba(241, 196, 15, 0.5)',  // 黄
+            'Unknown': 'rgba(150, 150, 150, 0.3)'
         };
 
-        // --- 2. 主要空港データ（サンプル） ---
-        // ラベルが重ならないよう、Globe.glの「labelsData」機能を使用します
+        // 主要空港データ
         const airportsData = [
             { name: "羽田空港", code: "HND", country: "JP", lat: 35.5494, lng: 139.7798 },
             { name: "成田国際空港", code: "NRT", country: "JP", lat: 35.7720, lng: 140.3929 },
@@ -52,36 +45,32 @@
             { name: "ロサンゼルス国際空港", code: "LAX", country: "US", lat: 33.9416, lng: -118.4085 }
         ];
 
-        // 地球儀の初期化
         const world = Globe()
             (document.getElementById('globeViz'))
-            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg') // 地球の背景テクスチャ
-            .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
-            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png'); // 宇宙の背景
+            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
+            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+            // 【軽量化策①】ポリゴンの描画精度を少し下げて計算を高速化
+            .polygonBorderColor(() => '#ffffff')
+            .polygonResolution(1); 
 
-        // --- 3. 国境線と国名データの読み込み ---
-        // 公開されているGeoJSON（世界地図の境界線データ）を利用
-        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+        // 【軽量化策②】読み込み元を「1:110mスケール（超軽量版）」のデータに変更
+        fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(countries => {
                 
                 world
-                    // --- 国境線と色分けの設定 ---
                     .polygonsData(countries.features)
-                    .polygonStrokeColor(() => '#ffffff') // 国境線は白
-                    .polygonSideColor(() => 'rgba(0, 100, 0, 0.15)')
+                    .polygonStrokeColor(() => 'rgba(255,255,255,0.6)') // 国境線を少し透過して描画負荷軽減
                     .polygonCapColor(d => {
-                        // 2レターコード（ISO_A2）を取得
-                        const code2 = d.properties.ISO_A2;
+                        // 2レターコードの取得先を軽量版のデータ構造（ISO_A2_EH または ISO_A2）に合わせる
+                        const code2 = d.properties.ISO_A2_EH || d.properties.ISO_A2 || d.properties.postal;
                         const tc = tcMapping[code2] || 'Unknown';
                         return tcColors[tc];
                     })
-                    // マウスホバー時の国ごとのポップアップ表示
                     .polygonLabel(d => {
-                        const name = d.properties.ADMIN;
-                        const code2 = d.properties.ISO_A2;
+                        const name = d.properties.NAME_JA || d.properties.NAME || "不明";
+                        const code2 = d.properties.ISO_A2_EH || d.properties.ISO_A2 || d.properties.postal;
                         
-                        // その国に属する空港をフィルタリング
                         const localAirports = airportsData.filter(ap => ap.country === code2);
                         let airportListHTML = localAirports.length > 0 
                             ? localAirports.map(ap => `• ${ap.name} (${ap.code})`).join('<br>')
@@ -98,25 +87,20 @@
                         `;
                     })
                     .onPolygonHover(hoverObj => world
-                        // ホバーした国を少し光らせる演出
-                        .polygonCapColor(d => d === hoverObj ? 'rgba(255, 255, 255, 0.8)' : tcColors[tcMapping[d.properties.ISO_A2] || 'Unknown'])
+                        .polygonCapColor(d => d === hoverObj ? 'rgba(255, 255, 255, 0.6)' : tcColors[tcMapping[d.properties.ISO_A2_EH || d.properties.ISO_A2 || d.properties.postal] || 'Unknown'])
                     )
 
-                    // --- 4. 空港ピン（ラベル）の設定 ---
-                    // 重なり防止（IncludeDot）機能を含んだLabelレイヤーを使用
+                    // 空港ピンの設定
                     .labelsData(airportsData)
                     .labelLat(d => d.lat)
                     .labelLng(d => d.lng)
-                    .labelText(d => `${d.code}`) // ピンの横に3レターを表示
+                    .labelText(d => `${d.code}`)
                     .labelSize(1.5)
-                    .labelDotRadius(0.4) // ピン（ドット）の大きさ
-                    .labelColor(() => '#ff4757') // ピンの色（赤系）
-                    .labelResolution(3)
-                    // 空港が密集したときに自動で避ける設定（重なり防止）
+                    .labelDotRadius(0.5)
+                    .labelColor(() => '#ff4757')
+                    // 【軽量化策③】文字の重なり防止計算を「静的」にして回転中の負荷を減らす
                     .labelsTransitionDuration(0);
 
-                // カメラの初期位置を日本付近に調整
-                world.controls().autoRotate = false;
                 world.pointOfView({ lat: 35, lng: 139, altitude: 2.5 });
             });
     </script>
