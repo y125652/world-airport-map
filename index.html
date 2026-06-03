@@ -22,14 +22,23 @@
     <div id="globeViz"></div>
 
     <script>
-        // 画像（テクスチャ）を一切使わず、単色でシンプルな球体をベースにする
         const myGlobe = Globe()(document.getElementById('globeViz'))
-            .backgroundColor('#000000')   // 背景（宇宙）の色
-            .baseColor('#111111')         // 地球（海）の色を暗いグレーに設定
-            .showAtmosphere(true)         // 輪郭をわかりやすくするために大気圏エフェクトを有効化
-            .atmosphereColor('#3a86ff');  // 大気圏の色を青に
+            .backgroundColor('#000000')   // 宇宙（背景）の色
+            .showAtmosphere(true)         // 大気圏エフェクト
+            .atmosphereColor('#3a86ff')   // 大気圏の色
+            
+            // 地球の表面に経緯度線を引いて立体感と地球儀感を出す
+            .labelsData([{ lat: 0, lng: 0, text: '' }]) // ライトを強制アクティブにするためのダミーデータ
+            .globeColor('#050b14') // 球体のベース色（海）
+            
+            // 地球儀のワイヤーフレーム（経緯度線）を設定
+            .hexPolygonsData([
+                { geometry: { type: "Polygon", coordinates: [[[-180, 90], [180, 90], [180, -90], [-180, -90], [-180, 90]]] } }
+            ])
+            .hexPolygonColor(() => 'rgba(58, 134, 255, 0.15)') // 線の色
+            .hexPolygonResolution(3); // グリッドの細かさ
 
-        // カメラの初期距離（地球が画面に収まるサイズ）
+        // カメラの初期距離
         myGlobe.pointOfView({ alt: 2.5 });
     </script>
 </body>
