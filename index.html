@@ -16,7 +16,6 @@
             width: 100vw;
             height: 100vh;
         }
-        /* ポップアップ（共通スタイル） */
         .info-label {
             position: absolute;
             background: rgba(0, 0, 0, 0.85);
@@ -44,7 +43,6 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
-        // 1. シーンとカメラの設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -53,20 +51,17 @@
         const MAX_ZOOM = 300;
         camera.position.z = currentZoom;
 
-        // 2. レンダラーの設定
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0xffffff, 1);
         container.appendChild(renderer.domElement);
 
-        // 3. 地球（ベースの青い球体）の作成
         const globeGroup = new THREE.Group();
         const sphereGeometry = new THREE.SphereGeometry(RADIUS, 32, 32);
         const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x3a86ff });
         const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         globeGroup.add(sphere);
 
-        // 4. 世界各地の主要貨物空港データ
         const cargoAirports = [
             // アジア・オセアニア
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
@@ -138,13 +133,12 @@
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7017, lng: -74.1469 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホル豪・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "フアン・サンタマリア国際空港 (SJO)", country: "コスタリカ", lat: 9.9939, lng: -84.2089 },
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 5. 座標変換関数
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng + 180) * (Math.PI / 180);
@@ -156,28 +150,26 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        // 国判定用のメッシュ群を保持する配列
         const countryMeshes = [];
 
-        // 6. 世界の国境線データを読み込み、ホバー判定用に面（Mesh）も生成
         fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-                
-                // ホバー時以外は非表示(透明)にする国判定用の塗りつぶし用マテリアル
                 const countryMaterial = new THREE.MeshBasicMaterial({ 
                     color: 0xffffff, 
                     transparent: true, 
-                    opacity: 0.0, // 通常時は完全に透明
+                    opacity: 0.0, 
                     side: THREE.DoubleSide
                 });
 
                 geoJson.features.forEach(feature => {
                     const type = feature.geometry.type;
                     const coordinates = feature.geometry.coordinates;
-                    const countryName = feature.properties.ADMIN || feature.properties.NAME;
-                    const isoA2 = feature.properties.ISO_A2 || "";
+                    
+                    // プロパティ名がデータソースによって異なる問題(ADMIN or NAME or name)に対応
+                    const countryName = feature.properties.ADMIN || feature.properties.NAME || feature.properties.name || "Unknown";
+                    const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
 
                     if (type === 'Polygon') {
                         createCountrySector(coordinates, lineMaterial, countryMaterial, countryName, isoA2);
@@ -189,13 +181,9 @@
                 });
             });
 
-        // 国の境界線とホバー領域(メッシュ)を構築する関数
         function createCountrySector(polygonCoords, lineMat, meshMat, name, iso2) {
-            // 外郭線用のポイント配列
             const outerCoords = polygonCoords[0];
             const points = [];
-            
-            // 判定用の平面形状(Shape)を生成
             const shape = new THREE.Shape();
 
             outerCoords.forEach((coord, index) => {
@@ -203,7 +191,6 @@
                 const lat = coord[1];
                 points.push(latLngToVector3(lat, lng, RADIUS + 0.1));
 
-                // 2D平面上のポリゴン形状を作る（ShapeGeometry用）
                 if(index === 0) {
                     shape.moveTo(lng, lat);
                 } else {
@@ -211,38 +198,29 @@
                 }
             });
 
-            // 国境線の描画
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMat);
             globeGroup.add(line);
 
-            // Shapeを3D球面の形状(ShapeGeometry)に変換
             try {
                 const shapeGeom = new THREE.ShapeGeometry(shape);
-                const countryMesh = new THREE.Mesh(shapeGeom, meshMat.clone()); // マテリアルを個別に制御するため複製
+                const countryMesh = new THREE.Mesh(shapeGeom, meshMat.clone());
 
-                // 平面データを3D球面の座標へマッピング変形する処理
                 const posAttr = countryMesh.geometry.attributes.position;
                 for (let i = 0; i < posAttr.count; i++) {
                     const lng = posAttr.getX(i);
                     const lat = posAttr.getY(i);
-                    // 球体の表面(RADIUS + 0.05)に座標を再配置
                     const v3 = latLngToVector3(lat, lng, RADIUS + 0.05);
                     posAttr.setXYZ(i, v3.x, v3.y, v3.z);
                 }
                 countryMesh.geometry.computeVertexNormals();
                 
-                // ホバー時に取り出す国情報をデータとして格納
                 countryMesh.userData = { type: 'country', name: name, iso2: iso2 };
-                
                 globeGroup.add(countryMesh);
                 countryMeshes.push(countryMesh);
-            } catch(e) {
-                // 複雑すぎる極地等のポリゴンエラーのスキップ用
-            }
+            } catch(e) {}
         }
 
-        // 7. 空港ピンの配置
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
@@ -259,12 +237,11 @@
         scene.add(globeGroup);
         globeGroup.rotation.y = 2.5;
 
-        // 8. マウス操作・ドラッグ・ズーム・ホバーの実装
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        let lastHoveredCountry = null; // 直前にホバーした国を記録
+        let lastHoveredCountry = null;
 
         window.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -276,22 +253,23 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
-            // 空港ピンのホバー検出
             const airportIntersects = raycaster.intersectObjects(pins);
             
             if (airportIntersects.length > 0) {
-                // 空港にカーソルが乗っている場合
                 const data = airportIntersects[0].object.userData;
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
                 labelEl.style.top = `${e.clientY}px`;
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
+                
+                if (lastHoveredCountry) {
+                    lastHoveredCountry.material.opacity = 0.0;
+                    lastHoveredCountry = null;
+                }
             } else {
-                // 空港に乗っていない場合、国のホバー検出
                 const countryIntersects = raycaster.intersectObjects(countryMeshes);
                 
-                // 直前の国の色（透明度）を戻す
                 if (lastHoveredCountry) {
                     lastHoveredCountry.material.opacity = 0.0;
                     lastHoveredCountry = null;
@@ -301,18 +279,15 @@
                     const hitCountry = countryIntersects[0].object;
                     const data = hitCountry.userData;
                     
-                    // 国の上にいる場合のポップアップ処理
                     labelEl.style.display = 'block';
                     labelEl.style.left = `${e.clientX}px`;
                     labelEl.style.top = `${e.clientY}px`;
                     labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso2})`;
                     document.body.style.cursor = 'default';
 
-                    // ホバーされた国を目立たせる（少し白く光らせる）
                     hitCountry.material.opacity = 0.25;
                     lastHoveredCountry = hitCountry;
                 } else {
-                    // 何もホバーしていない場合
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
                 }
@@ -341,7 +316,6 @@
             camera.position.z = currentZoom;
         }, { passive: true });
 
-        // 9. 描画ループ
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
