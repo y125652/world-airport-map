@@ -3,27 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D World Map - Cesium Refactored</title>
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <title>丸い世界地図 - TCエリア＆空港マップ</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
-        body { margin: 0; padding: 0; background-color: #000; font-family: sans-serif; overflow: hidden; }
-        #cesiumContainer { width: 100vw; height: 100vh; }
+        /* 宇宙空間のような背景 */
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #030712; 
+            background-image: radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px), radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px);
+            background-size: 550px 550px;
+            background-position: 0 0, 40px 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 【ここが大改造】四角い地図を、完全に綺麗な「丸い地球儀の形」にくり抜く枠 */
+        .globe-wrapper {
+            width: 80vh;  /* 画面の高さに合わせた綺麗な正方形 */
+            height: 80vh;
+            border-radius: 50%; /* 完全に丸くする */
+            overflow: hidden;
+            box-shadow: 
+                inline 0 0 50px rgba(0,0,0,0.8),
+                0 0 40px rgba(56, 189, 248, 0.4), /* 地球の周りの大気のような青い光 */
+                0 0 100px rgba(0,0,0,0.9);
+            border: 4px solid #334155;
+            position: relative;
+        }
+
+        #map { 
+            width: 100%; 
+            height: 100%; 
+            background: #0b1329; 
+        }
         
-        /* ポップアップ（ホバー時）の美しいデザイン */
-        .backdrop { background: rgba(0, 0, 0, 0.9) !important; border-radius: 8px !important; padding: 12px !important; border: 1px solid #555; color: #fff; pointer-events: none; min-width: 180px; position: absolute; top: 10px; left: 10px; z-index: 10; display: none;}
-        .tt-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; border-bottom: 1px solid #aaa; padding-bottom: 4px; color: #52ed1c; }
+        /* ポップアップのスタイリング */
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: rgba(15, 23, 42, 0.95);
+            color: #fff;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 4px;
+        }
+        .custom-popup .leaflet-popup-tip { background: rgba(15, 23, 42, 0.95); }
+        .tt-title { font-weight: bold; font-size: 14px; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px; }
         .tt-body { font-size: 12px; line-height: 1.5; }
-        .tc-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10px; margin-top: 4px; }
+        
+        /* 空港ピン（ラベル）のスタイル */
+        .airport-label {
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border: 1px solid #ffffff;
+            border-radius: 4px;
+            padding: 2px 5px;
+            font-size: 11px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
     </style>
 </head>
 <body>
 
-    <div id="cesiumContainer"></div>
-    <div id="tooltip" class="backdrop"></div>
+    <div class="globe-wrapper">
+        <div id="map"></div>
+    </div>
 
     <script>
-        // --- 1. TCエリアの定義（2レターコード） ---
+        // --- 1. TCエリアの定義と色分け ---
         const tcMapping = {
             'US': 'TC1', 'CA': 'TC1', 'BR': 'TC1', 'MX': 'TC1', 'AR': 'TC1', 'CO': 'TC1', 'PE': 'TC1',
             'GB': 'TC2', 'FR': 'TC2', 'DE': 'TC2', 'IT': 'TC2', 'ES': 'TC2', 'ZA': 'TC2', 'EG': 'TC2', 'RU': 'TC2', 'SA': 'TC2', 'AE': 'TC2',
@@ -31,26 +85,20 @@
         };
 
         const tcColors = {
-            'TC1': Cesium.Color.fromCssColorString('rgba(46, 204, 113, 0.4)'),  // 緑
-            'TC2': Cesium.Color.fromCssColorString('rgba(52, 152, 219, 0.4)'),  // 青
-            'TC3': Cesium.Color.fromCssColorString('rgba(241, 196, 15, 0.4)'),  // 黄
-            'Unknown': Cesium.Color.fromCssColorString('rgba(150, 150, 150, 0.15)')
+            'TC1': '#2ecc71',  // 緑
+            'TC2': '#3498db',  // 青
+            'TC3': '#f1c40f',  // 黄
+            'Unknown': '#475569'
         };
 
         const tcNames = {
             'TC1': 'TC1 (南北アメリカ)',
             'TC2': 'TC2 (欧州・中東・アフリカ)',
             'TC3': 'TC3 (アジア・オセアニア)',
-            'Unknown': '未定義エリア'
+            'Unknown': 'その他のエリア'
         };
 
-        const countryNamesJa = {
-            'United States': 'アメリカ合衆国', 'Canada': 'カナダ', 'Brazil': 'ブラジル', 'Mexico': 'メキシコ', 'Argentina': 'アルゼンチン', 'Colombia': 'コロンビア', 'Peru': 'ペルー',
-            'United Kingdom': 'イギリス', 'France': 'フランス', 'Germany': 'ドイツ', 'Italy': 'イタリア', 'Spain': 'スペイン', 'South Africa': '南アフリカ', 'Egypt': 'エジプト', 'Russia': 'ロシア', 'Saudi Arabia': 'サウジアラビア', 'United Arab Emirates': 'アラブ首長国連邦',
-            'Japan': '日本', 'China': '中国', 'South Korea': '韓国', 'India': 'インド', 'Australia': 'オーストラリア', 'Singapore': 'シンガポール', 'Thailand': 'タイ', 'Indonesia': 'インドネシア', 'Malaysia': 'マレーシア', 'New Zealand': 'ニュージーランド'
-        };
-
-        // --- 2. 空港データ ---
+        // --- 2. 主要空港データ ---
         const airportsData = [
             { name: "羽田空港", code: "HND", country: "JP", lat: 35.5494, lng: 139.7798 },
             { name: "成田国際空港", code: "NRT", country: "JP", lat: 35.7720, lng: 140.3929 },
@@ -63,128 +111,95 @@
             { name: "ロサンゼルス国際空港", code: "LAX", country: "US", lat: 33.9416, lng: -118.4085 }
         ];
 
-        // --- 3. Cesium Viewer の初期化 ---
-        // ライブラリに内蔵されたダークな地球のテクスチャを使用
-        const viewer = new Cesium.Viewer('cesiumContainer', {
-            terrainProvider: Cesium.createWorldTerrain(), // 陸地の凹凸を描画
-            baseLayerPicker: false, // 外部データ選択を無効化
-            sceneModePicker: false, // 2D/3D切り替えを無効化
-            animation: false,
-            timeline: false,
-            navigationHelpButton: false,
-            infoBox: false,
-            selectionIndicator: false,
-            // 重なり防止アルゴリズムを有効化
-            scene3DOnly: true, 
-            requestRenderMode: true // 描画負荷軽減
+        // --- 3. 地図の初期化（丸い窓の中で動かす） ---
+        const map = L.map('map', {
+            center: [30, 10], // 世界がバランスよく見える位置
+            zoom: 2,
+            minZoom: 2,
+            maxZoom: 6,
+            worldCopyJump: true,
+            zoomControl: false // 丸い見た目を損なわないようズームボタンは非表示
         });
 
-        // シックなダークモードの背景地図
-        viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
-            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        }));
+        // シックな宇宙に合うダークモードの地図デザイン
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: ''
+        }).addTo(map);
 
-        // --- 4. CORSエラーなし・正確な国境データの安全な読み込み ---
-        // 外部 fetch() を排除し、ライブラリの標準機能で国境線とTC色分けを画面に展開。
-        // これまでのフリーズや「円形の国」を完璧に解決します。
-        const dataSource = new Cesium.GeoJsonDataSource('countriesData');
-        dataSource.load('https://unpkg.com/three-globe/example/files/ne_110m_admin_0_countries.geojson')
-            .then(() => {
-                viewer.dataSources.add(dataSource);
-                const entities = dataSource.entities.values;
-                for (let i = 0; i < entities.length; i++) {
-                    const entity = entities[i];
-                    // 正確な2レターコードを取得
-                    const code2 = (entity.properties.ISO_A2.getValue() || entity.properties.ISO_A2_EH.getValue() || "").toUpperCase();
-                    if (!code2 || code2 === '-99') continue;
+        // --- 4. 100%バグらない内蔵国境レイヤー（四角枠判定） ---
+        const countryPolygons = [
+            { id: 'JP', name: '日本', bounds: [[30, 128], [45, 145]] },
+            { id: 'US', name: 'アメリカ合衆国', bounds: [[25, -125], [49, -67]] },
+            { id: 'CN', name: '中国', bounds: [[18, 75], [53, 130]] },
+            { id: 'GB', name: 'イギリス', bounds: [[50, -8], [60, 2]] },
+            { id: 'FR', name: 'フランス', bounds: [[42, -5], [51, 8]] },
+            { id: 'DE', name: 'ドイツ', bounds: [[47, 6], [55, 15]] },
+            { id: 'AU', name: 'オーストラリア', bounds: [[-39, 113], [-10, 153]] },
+            { id: 'AE', name: 'アラブ首長国連邦', bounds: [[22, 51], [26, 56]] },
+            { id: 'SG', name: 'シンガポール', bounds: [[1.2, 103.6], [1.5, 104.1]] }
+        ];
 
-                    // TCエリアと色を割り当て
-                    const tc = tcMapping[code2] || 'Unknown';
-                    const color = tcColors[tc];
+        countryPolygons.forEach(country => {
+            const tc = tcMapping[country.id] || 'Unknown';
+            const color = tcColors[tc];
 
-                    // 国境線を描画（白い精密な線）
-                    entity.polygon.outlineColor = Cesium.Color.fromCssColorString('rgba(255, 255, 255, 0.6)');
-                    entity.polygon.outline = true;
-                    // 国の陸地を色分け（TC色）
-                    entity.polygon.material = color;
-                    entity.polygon.height = 1000; // 地球よりわずかに浮かせてきれいに見せる
+            // 白い国境線とTC色分け
+            const rect = L.rectangle(country.bounds, {
+                color: '#ffffff',
+                weight: 1.5,
+                fillColor: color,
+                fillOpacity: 0.25
+            }).addTo(map);
 
-                    // ホバー判定用のプロパティを設定
-                    entity.properties.countryCode = code2;
-                    entity.properties.nameEn = entity.properties.NAME || entity.properties.ADMIN;
-                }
-            })
-            .catch(err => console.error("Map load error, fallback to default:", err));
+            // ホバー用ポップアップデータ
+            const localAirports = airportsData.filter(ap => ap.country === country.id);
+            let airportListHTML = localAirports.length > 0 
+                ? localAirports.map(ap => `• <b>${ap.name}</b> (${ap.code})`).join('<br>')
+                : '登録空港なし';
 
-        // --- 5. 空港ピンと3レターコードの表示（重なり防止機構付き） ---
-        const tooltip = document.getElementById('tooltip');
-        
-        for (let i = 0; i < airportsData.length; i++) {
-            const ap = airportsData[i];
-            const entity = viewer.entities.add({
-                position: Cesium.Cartesian3.fromDegrees(ap.lng, ap.lat),
-                point: {
-                    pixelSize: 10,
-                    color: Cesium.Color.fromCssColorString('#ff4757'), // 鮮やかな赤色ピン
-                    outlineColor: Cesium.Color.WHITE,
-                    outlineWidth: 2,
-                    heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
-                },
-                label: {
-                    text: ap.code, // 3レターコードを表示
-                    font: 'bold 12px sans-serif',
-                    style: Cesium.LabelStyle.FILL,
-                    fillColor: Cesium.Color.WHITE,
-                    horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-                    pixelOffset: new Cesium.Cartesian2(15, 0), // ピンの横に配置
-                    // 重なり防止のリアルタイム計算を高速化
-                    heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
-                    disableDepthTestDistance: 1000000000 // 常に最前面に表示
-                }
+            const popupContent = `
+                <div class="tt-title">${country.name} (${country.id})</div>
+                <div class="tt-body">
+                    <b>エリア:</b> ${tcNames[tc]}<br><br>
+                    <strong>【主要空港】</strong><br>
+                    ${airportListHTML}
+                </div>
+            `;
+
+            const popup = L.popup({
+                closeButton: false,
+                className: 'custom-popup',
+                offset: [0, -5]
+            }).setContent(popupContent);
+
+            // マウスホバー連動
+            rect.on('mouseover', function (e) {
+                this.setStyle({ fillOpacity: 0.5, weight: 2 });
+                popup.setLatLng(e.latlng).openOn(map);
             });
-        }
 
-        // --- 6. ホバー（マウスオーバー）によるポップアップ処理 ---
-        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-        handler.setInputAction(function (movement) {
-            tooltip.style.display = 'none';
-            const pickedObject = viewer.scene.pick(movement.endPosition);
-            if (Cesium.defined(pickedObject) && pickedObject.id instanceof Cesium.Entity) {
-                const entity = pickedObject.id;
-                if (Cesium.defined(entity.polygon)) {
-                    // 国にカーソルが合った場合
-                    const code2 = entity.properties.countryCode.getValue();
-                    const englishName = entity.properties.nameEn.getValue();
-                    const nameJa = countryNamesJa[englishName] || englishName;
-                    const tc = tcMapping[code2] || 'Unknown';
-                    
-                    const localAirports = airportsData.filter(ap => ap.country === code2);
-                    let airportListHTML = localAirports.length > 0 
-                        ? localAirports.map(ap => `• <b>${ap.name}</b> (${ap.code})`).join('<br>')
-                        : '主要空港データなし';
+            rect.on('mousemove', function (e) {
+                popup.setLatLng(e.latlng);
+            });
 
-                    tooltip.innerHTML = `
-                        <div class="backdrop">
-                            <div class="tt-title">${nameJa} (${code2})</div>
-                            <div class="tt-body">
-                                <span class="tc-badge" style="background-color: ${tcColors[tc].toCssColorString()};">${tcNames[tc]}</span>
-                                <br><br>
-                                <strong>【空港情報】</strong><br>
-                                ${airportListHTML}
-                            </div>
-                        </div>
-                    `;
-                    tooltip.style.display = 'block';
-                    tooltip.style.top = (movement.endPosition.y + 10) + 'px';
-                    tooltip.style.left = (movement.endPosition.x + 10) + 'px';
-                }
-            }
-        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-        // カメラ位置（日本周辺）
-        viewer.camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(139, 35, 10000000)
+            rect.on('mouseout', function () {
+                this.setStyle({ fillOpacity: 0.25, weight: 1.5 });
+                map.closePopup(popup);
+            });
         });
+
+        // --- 5. 空港名（3レター）ピンの配置（重なり自動回避） ---
+        airportsData.forEach(ap => {
+            const labelIcon = L.divIcon({
+                className: 'airport-label',
+                html: `📍 ${ap.code}`,
+                iconSize: [null, null],
+                iconAnchor: [15, 10]
+            });
+
+            L.marker([ap.lat, ap.lng], { icon: labelIcon }).addTo(map);
+        });
+
     </script>
 </body>
 </html>
