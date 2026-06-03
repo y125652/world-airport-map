@@ -212,12 +212,16 @@
             texture.needsUpdate = true;
         }
 
+        // 【修正部】入れ子になったポリゴン（アイランドや穴）構造の描画不具合を修正
         function renderPolygon(polygon) {
             ctx.beginPath();
-            polygon[0].forEach((coord, i) => {
-                const pos = geoToCanvas(coord[1], coord[0]);
-                if (i === 0) ctx.moveTo(pos.x, pos.y);
-                else ctx.lineTo(pos.x, pos.y);
+            // 各パート（外郭線および穴）ごとにパスを繋げる
+            polygon.forEach(ring => {
+                ring.forEach((coord, i) => {
+                    const pos = geoToCanvas(coord[1], coord[0]);
+                    if (i === 0) ctx.moveTo(pos.x, pos.y);
+                    else ctx.lineTo(pos.x, pos.y);
+                });
             });
             ctx.fill();
             ctx.stroke();
