@@ -69,8 +69,8 @@
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three-globe": "https://unpkg.com/three-globe@2.31.1/dist/three-globe.module.esm.js"
+                "three": "https://esm.sh/three@0.160.0",
+                "three-globe": "https://esm.sh/three-globe@2.31.1"
             }
         }
     </script>
@@ -120,8 +120,7 @@
 
         // --- 2. 地球儀の初期化 ---
         const Globe = new ThreeGlobe()
-            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
-            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+            .globeImageUrl('https://images.unsplash.com/photo-1614730321146-b6fa6a46bcb4?auto=format&fit=crop&w=1000&q=80') // CORS制限のない代替テクスチャ
             .polygonsData(countriesData.features)
             .polygonCapColor(d => tcColors[d.properties.TC] || '#aaaaaa')
             .polygonSideColor(() => 'rgba(255, 255, 255, 0.05)')
