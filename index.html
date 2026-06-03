@@ -3,203 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>丸い世界地図 - TCエリア＆空港マップ</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+    <title>3D Globe - TC Areas & Airports</title>
     <style>
-        /* 宇宙空間のような背景 */
-        body { 
-            margin: 0; 
-            padding: 0; 
-            background-color: #030712; 
-            background-image: radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px), radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px);
-            background-size: 550px 550px;
-            background-position: 0 0, 40px 60px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        #globeViz {
+            width: 100vw;
             height: 100vh;
-            overflow: hidden;
         }
-
-        /* 【ここが大改造】四角い地図を、完全に綺麗な「丸い地球儀の形」にくり抜く枠 */
-        .globe-wrapper {
-            width: 80vh;  /* 画面の高さに合わせた綺麗な正方形 */
-            height: 80vh;
-            border-radius: 50%; /* 完全に丸くする */
-            overflow: hidden;
-            box-shadow: 
-                inline 0 0 50px rgba(0,0,0,0.8),
-                0 0 40px rgba(56, 189, 248, 0.4), /* 地球の周りの大気のような青い光 */
-                0 0 100px rgba(0,0,0,0.9);
-            border: 4px solid #334155;
-            position: relative;
-        }
-
-        #map { 
-            width: 100%; 
-            height: 100%; 
-            background: #0b1329; 
-        }
-        
-        /* ポップアップのスタイリング */
-        .custom-popup .leaflet-popup-content-wrapper {
-            background: rgba(15, 23, 42, 0.95);
-            color: #fff;
-            border: 1px solid #475569;
-            border-radius: 8px;
-            padding: 4px;
-        }
-        .custom-popup .leaflet-popup-tip { background: rgba(15, 23, 42, 0.95); }
-        .tt-title { font-weight: bold; font-size: 14px; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 6px; }
-        .tt-body { font-size: 12px; line-height: 1.5; }
-        
-        /* 空港ピン（ラベル）のスタイル */
-        .airport-label {
-            background: rgba(239, 68, 68, 0.9);
+        /* UIレイヤー */
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
             color: white;
-            border: 1px solid #ffffff;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        h1 { margin: 0 0 10px 0; font-size: 18px; }
+        .legend { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .color-box { width: 12px; height: 12px; border-radius: 2px; }
+
+        /* 空港ピンのスタイル */
+        .airport-pin {
+            width: 8px;
+            height: 8px;
+            background-color: #ff3366;
+            border-radius: 50%;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 8px #ff3366;
+            transition: transform 0.2s;
+        }
+        .airport-pin:hover {
+            transform: translate(-50%, -50%) scale(1.5);
+        }
+
+        /* ポップアップ（ツールチップ） */
+        .airport-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 6px 10px;
             border-radius: 4px;
-            padding: 2px 5px;
-            font-size: 11px;
-            font-weight: bold;
+            font-size: 12px;
             white-space: nowrap;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            border: 1px solid #fff;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            transform: translate(10px, -50%);
+        }
+        .airport-pin:hover + .airport-label {
+            display: block;
         }
     </style>
+
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/three-globe"></script>
 </head>
 <body>
 
-    <div class="globe-wrapper">
-        <div id="map"></div>
+    <div id="ui-container">
+        <h1>World Airport Map (TC Areas)</h1>
+        <div class="legend">
+            <div class="legend-item"><div class="color-box" style="background: #3a86ff;"></div> TC1 (Americas)</div>
+            <div class="legend-item"><div class="color-box" style="background: #ff006e;"></div> TC2 (Europe/Africa/ME)</div>
+            <div class="legend-item"><div class="color-box" style="background: #8338ec;"></div> TC3 (Asia/Oceania)</div>
+        </div>
     </div>
 
+    <div id="globeViz"></div>
+
     <script>
-        // --- 1. TCエリアの定義と色分け ---
-        const tcMapping = {
-            'US': 'TC1', 'CA': 'TC1', 'BR': 'TC1', 'MX': 'TC1', 'AR': 'TC1', 'CO': 'TC1', 'PE': 'TC1',
-            'GB': 'TC2', 'FR': 'TC2', 'DE': 'TC2', 'IT': 'TC2', 'ES': 'TC2', 'ZA': 'TC2', 'EG': 'TC2', 'RU': 'TC2', 'SA': 'TC2', 'AE': 'TC2',
-            'JP': 'TC3', 'CN': 'TC3', 'KR': 'TC3', 'IN': 'TC3', 'AU': 'TC3', 'SG': 'TC3', 'TH': 'TC3', 'ID': 'TC3', 'MY': 'TC3', 'NZ': 'TC3'
+        // --- 1. サンプルデータ定義 ---
+        // TCエリア判定を含めた国データ（簡易版GeoJSON構造）
+        const countriesData = {
+            type: "FeatureCollection",
+            features: [
+                { type: "Feature", properties: { NAME: "Japan", ISO_A2: "JP", TC: "TC3" }, geometry: { type: "Polygon", coordinates: [[[140, 40], [145, 40], [145, 35], [140, 35], [140, 40]]] } }, // 簡易的な四角形
+                { type: "Feature", properties: { NAME: "United States", ISO_A2: "US", TC: "TC1" }, geometry: { type: "Polygon", coordinates: [[[-120, 45], [-80, 45], [-80, 35], [-120, 35], [-120, 45]]] } },
+                { type: "Feature", properties: { NAME: "United Kingdom", ISO_A2: "GB", TC: "TC2" }, geometry: { type: "Polygon", coordinates: [[[-5, 55], [2, 55], [2, 50], [-5, 50], [-5, 55]]] } },
+                { type: "Feature", properties: { NAME: "Singapore", ISO_A2: "SG", TC: "TC3" }, geometry: { type: "Polygon", coordinates: [[[103, 1.4], [104, 1.4], [104, 1.2], [103, 1.2], [103, 1.4]]] } }
+            ]
         };
 
+        // 空港データ (緯度, 経度, 空港名, 3レター)
+        const airports = [
+            { name: "Haneda Airport", code: "HND", lat: 35.5494, lng: 139.7798 },
+            { name: "Narita Airport", code: "NRT", lat: 35.7720, lng: 140.3929 },
+            { name: "Los Angeles International", code: "LAX", lat: 33.9416, lng: -118.4085 },
+            { name: "John F. Kennedy International", code: "JFK", lat: 40.6413, lng: -73.7781 },
+            { name: "London Heathrow", code: "LHR", lat: 51.4700, lng: -0.4543 },
+            { name: "Singapore Changi", code: "SIN", lat: 1.3502, lng: 103.9893 }
+        ];
+
+        // TCエリアごとの色分け設定
         const tcColors = {
-            'TC1': '#2ecc71',  // 緑
-            'TC2': '#3498db',  // 青
-            'TC3': '#f1c40f',  // 黄
-            'Unknown': '#475569'
+            'TC1': '#3a86ff', // 青
+            'TC2': '#ff006e', // 赤ピンク
+            'TC3': '#8338ec'  // 紫
         };
 
-        const tcNames = {
-            'TC1': 'TC1 (南北アメリカ)',
-            'TC2': 'TC2 (欧州・中東・アフリカ)',
-            'TC3': 'TC3 (アジア・オセアニア)',
-            'Unknown': 'その他のエリア'
-        };
+        // --- 2. 地球儀の初期化 ---
+        const Globe = new ThreeGlobe()
+            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg') // 地球の表面テクスチャ
+            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png') // 凹凸
+            
+            // 国境線と塗りつぶしの設定
+            .polygonsData(countriesData.features)
+            .polygonCapColor(d => tcColors[d.properties.TC] || '#aaaaaa')
+            .polygonSideColor(() => 'rgba(255, 255, 255, 0.05)')
+            .polygonStrokeColor(() => '#ffffff') // 国境線
+            .polygonLabel(d => `<b>${d.properties.NAME} (${d.properties.ISO_A2})</b>`); // ホバー時の国名表示
 
-        // --- 2. 主要空港データ ---
-        const airportsData = [
-            { name: "羽田空港", code: "HND", country: "JP", lat: 35.5494, lng: 139.7798 },
-            { name: "成田国際空港", code: "NRT", country: "JP", lat: 35.7720, lng: 140.3929 },
-            { name: "ジョン・F・ケネディ国際空港", code: "JFK", country: "US", lat: 40.6413, lng: -73.7781 },
-            { name: "ロンドン・ヒースロー空港", code: "LHR", country: "GB", lat: 51.4700, lng: -0.4543 },
-            { name: "パリ＝シャルル・ド・ゴール空港", code: "CDG", country: "FR", lat: 49.0097, lng: 2.5479 },
-            { name: "シンガポール・チャンギ空港", code: "SIN", country: "SG", lat: 1.3502, lng: 103.9893 },
-            { name: "シドニー国際空港", code: "SYD", country: "AU", lat: -33.9461, lng: 151.1772 },
-            { name: "ドバイ国際空港", code: "DXB", country: "AE", lat: 25.2532, lng: 55.3657 },
-            { name: "ロサンゼルス国際空港", code: "LAX", country: "US", lat: 33.9416, lng: -118.4085 }
-        ];
-
-        // --- 3. 地図の初期化（丸い窓の中で動かす） ---
-        const map = L.map('map', {
-            center: [30, 10], // 世界がバランスよく見える位置
-            zoom: 2,
-            minZoom: 2,
-            maxZoom: 6,
-            worldCopyJump: true,
-            zoomControl: false // 丸い見た目を損なわないようズームボタンは非表示
-        });
-
-        // シックな宇宙に合うダークモードの地図デザイン
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: ''
-        }).addTo(map);
-
-        // --- 4. 100%バグらない内蔵国境レイヤー（四角枠判定） ---
-        const countryPolygons = [
-            { id: 'JP', name: '日本', bounds: [[30, 128], [45, 145]] },
-            { id: 'US', name: 'アメリカ合衆国', bounds: [[25, -125], [49, -67]] },
-            { id: 'CN', name: '中国', bounds: [[18, 75], [53, 130]] },
-            { id: 'GB', name: 'イギリス', bounds: [[50, -8], [60, 2]] },
-            { id: 'FR', name: 'フランス', bounds: [[42, -5], [51, 8]] },
-            { id: 'DE', name: 'ドイツ', bounds: [[47, 6], [55, 15]] },
-            { id: 'AU', name: 'オーストラリア', bounds: [[-39, 113], [-10, 153]] },
-            { id: 'AE', name: 'アラブ首長国連邦', bounds: [[22, 51], [26, 56]] },
-            { id: 'SG', name: 'シンガポール', bounds: [[1.2, 103.6], [1.5, 104.1]] }
-        ];
-
-        countryPolygons.forEach(country => {
-            const tc = tcMapping[country.id] || 'Unknown';
-            const color = tcColors[tc];
-
-            // 白い国境線とTC色分け
-            const rect = L.rectangle(country.bounds, {
-                color: '#ffffff',
-                weight: 1.5,
-                fillColor: color,
-                fillOpacity: 0.25
-            }).addTo(map);
-
-            // ホバー用ポップアップデータ
-            const localAirports = airportsData.filter(ap => ap.country === country.id);
-            let airportListHTML = localAirports.length > 0 
-                ? localAirports.map(ap => `• <b>${ap.name}</b> (${ap.code})`).join('<br>')
-                : '登録空港なし';
-
-            const popupContent = `
-                <div class="tt-title">${country.name} (${country.id})</div>
-                <div class="tt-body">
-                    <b>エリア:</b> ${tcNames[tc]}<br><br>
-                    <strong>【主要空港】</strong><br>
-                    ${airportListHTML}
-                </div>
-            `;
-
-            const popup = L.popup({
-                closeButton: false,
-                className: 'custom-popup',
-                offset: [0, -5]
-            }).setContent(popupContent);
-
-            // マウスホバー連動
-            rect.on('mouseover', function (e) {
-                this.setStyle({ fillOpacity: 0.5, weight: 2 });
-                popup.setLatLng(e.latlng).openOn(map);
+        // --- 3. 空港ピン（HTML要素）の追加 ---
+        // ThreeGlobeの「htmlElements」機能を使って、3D空間上の座標にHTMLのピンを配置します
+        Globe.htmlElementsData(airports)
+            .htmlElement(d => {
+                const container = document.createElement('div');
+                
+                // ピン要素
+                const pin = document.createElement('div');
+                pin.className = 'airport-pin';
+                
+                // ラベル要素（ホバー時に表示）
+                const label = document.createElement('div');
+                label.className = 'airport-label';
+                label.innerHTML = `<strong>${d.name}</strong> (${d.code})`;
+                
+                container.appendChild(pin);
+                container.appendChild(label);
+                return container;
             });
 
-            rect.on('mousemove', function (e) {
-                popup.setLatLng(e.latlng);
-            });
+        // --- 4. Three.js レンダラーとカメラの設定（画面への描画） ---
+        const viz = document.getElementById('globeViz');
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(viz.clientWidth, viz.clientHeight);
+        viz.appendChild(renderer.domElement);
 
-            rect.on('mouseout', function () {
-                this.setStyle({ fillOpacity: 0.25, weight: 1.5 });
-                map.closePopup(popup);
-            });
-        });
+        const scene = new THREE.Scene();
+        scene.add(Globe);
+        scene.add(new THREE.AmbientLight(0xbbbbbb));
+        scene.add(new THREE.DirectionalLight(0xffffff, 0.6));
 
-        // --- 5. 空港名（3レター）ピンの配置（重なり自動回避） ---
-        airportsData.forEach(ap => {
-            const labelIcon = L.divIcon({
-                className: 'airport-label',
-                html: `📍 ${ap.code}`,
-                iconSize: [null, null],
-                iconAnchor: [15, 10]
-            });
+        const camera = new THREE.PerspectiveCamera(50, viz.clientWidth / viz.clientHeight, 1, 1000);
+        camera.position.z = 300;
 
-            L.marker([ap.lat, ap.lng], { icon: labelIcon }).addTo(map);
-        });
+        // --- 5. マウス操作（回転・ズーム）の実装 ---
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
 
-    </script>
-</body>
-</html>
+        viz.addEventListener('mousedown', (e) => { isDragging = true; });
+        viz.addEventListener('mousemove', (e) => {
+            const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.
