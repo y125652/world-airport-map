@@ -32,7 +32,6 @@
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"></script>
 </head>
 <body>
 
@@ -44,6 +43,7 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
+        // 1. シーン・カメラ・レンダラーの設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -58,12 +58,26 @@
         container.appendChild(renderer.domElement);
 
         const globeGroup = new THREE.Group();
-        
-        // 1. 海のメッシュ（暗い濃紺）
-        const sphereGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x071124 }); 
-        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-        globeGroup.add(sphere);
+
+        // 2. 高速＆バグなしの「動的キャンバステクスチャ」の仕組み
+        // 裏側で2D地図を描いて、それを球体にピタッと貼り付けるため絶対にぐちゃぐちゃになりません
+        const canvas = document.createElement('canvas');
+        canvas.width = 4096;  // 高解像度マップ
+        canvas.height = 2048;
+        const ctx = canvas.getContext('2d');
+        const texture = new THREE.CanvasTexture(canvas);
+
+        const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
+        const globeMaterial = new THREE.MeshBasicMaterial({ map: texture });
+        const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
+        globeGroup.add(globeMesh);
+
+        // 緯度経度を2Dキャンバスの座標に変換する関数
+        function geoToCanvas(lat, lng) {
+            const x = ((lng + 180) / 360) * canvas.width;
+            const y = ((90 - lat) / 180) * canvas.height;
+            return { x, y };
+        }
 
         const cargoAirports = [
             // アジア・オセアニア
@@ -142,18 +156,17 @@
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
+        // 経緯度→3D空間空間座標(XYZ)への変換
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng + 180) * (Math.PI / 180);
-
             const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
             const z = radius * Math.sin(phi) * Math.cos(theta);
-
             return new THREE.Vector3(x, y, z);
         }
 
-        // 2. 緯度・経度が多角形（国）の内側にあるか判定するポリゴン判定ロジック
+        // 2D平面上の点の内外判定ロジック
         function isPointInPolygon(lat, lng, polygon) {
             let inside = false;
             for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -165,150 +178,61 @@
             return inside;
         }
 
-        const countryFeatures = [];
+        let geoJsonData = null;
+        let hoveredCountryName = "";
 
+        // 3. 地図を瞬時に再描画するマスター関数（バグの起きない超軽量処理）
+        function drawMap(targetCountryName = "") {
+            if (!geoJsonData) return;
+
+            // 海の色：暗い濃紺
+            ctx.fillStyle = '#071124';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            geoJsonData.features.forEach(feature => {
+                const type = feature.geometry.type;
+                const coordinates = feature.geometry.coordinates;
+                const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
+
+                // ホバーした国なら「鮮やかな青」、それ以外の陸地は「明るいグレー」
+                if (countryName === targetCountryName) {
+                    ctx.fillStyle = '#1e90ff';  
+                } else {
+                    ctx.fillStyle = '#dcdcdc';  
+                }
+                ctx.strokeStyle = '#556688'; // 国境線の色
+                ctx.lineWidth = 1.5;
+
+                if (type === 'Polygon') {
+                    renderPolygon(coordinates);
+                } else if (type === 'MultiPolygon') {
+                    coordinates.forEach(polygon => renderPolygon(polygon));
+                }
+            });
+
+            texture.needsUpdate = true; // Three.jsの球体に描画変更を通知
+        }
+
+        function renderPolygon(polygon) {
+            ctx.beginPath();
+            polygon[0].forEach((coord, i) => {
+                const pos = geoToCanvas(coord[1], coord[0]);
+                if (i === 0) ctx.moveTo(pos.x, pos.y);
+                else ctx.lineTo(pos.x, pos.y);
+            });
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // 世界の国境データを読み込み
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
-            .then(geoJson => {
-                const lineMaterial = new THREE.LineBasicMaterial({ color: 0x556688 }); // 国境線を少し柔らかい色に
-
-                geoJson.features.forEach(feature => {
-                    const type = feature.geometry.type;
-                    const coordinates = feature.geometry.coordinates;
-                    const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
-                    const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
-
-                    // 境界線の描画処理
-                    if (type === 'Polygon') {
-                        drawBorderLines(coordinates[0], lineMaterial);
-                    } else if (type === 'MultiPolygon') {
-                        coordinates.forEach(polygon => {
-                            drawBorderLines(polygon[0], lineMaterial);
-                        });
-                    }
-
-                    // ホバー判定用に国のジオメトリデータをストック
-                    countryFeatures.push({
-                        name: countryName,
-                        iso2: isoA2,
-                        type: type,
-                        coordinates: coordinates
-                    });
-                });
-
-                // 3. 陸地（国全体）を隙間なく完全に明るいグレーで一括塗りつぶす新処理
-                // 球体の頂点データを直接書き換えて「陸地メッシュ」を作成
-                const landMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xdcdcdc, // 陸地：明るいグレー
-                    vertexColors: true 
-                });
-
-                const globeGeom = new THREE.SphereGeometry(RADIUS + 0.02, 120, 120); // 判定用に解像度アップ
-                const posAttr = globeGeom.attributes.position;
-                const colors = [];
-
-                // 球体すべての頂点が「どの国に属するか」を網羅チェック
-                for (let i = 0; i < posAttr.count; i++) {
-                    const vx = posAttr.getX(i);
-                    const vy = posAttr.getY(i);
-                    const vz = posAttr.getZ(i);
-
-                    // 3D空間座標(XYZ)から経緯度(Lat/Lng)へ逆変換
-                    const rad = Math.sqrt(vx*vx + vy*vy + vz*vz);
-                    const lat = 90 - Math.acos(vy / rad) * (180 / Math.PI);
-                    let lng = Math.atan2(-vx, vz) * (180 / Math.PI) - 180;
-                    if (lng < -180) lng += 360;
-
-                    let isLand = false;
-                    // いずれかの国のポリゴン内部に入っているか高速スキャン
-                    for (let c = 0; c < countryFeatures.length; c++) {
-                        const feat = countryFeatures[c];
-                        if (feat.type === 'Polygon') {
-                            if (isPointInPolygon(lat, lng, feat.coordinates[0])) { isLand = true; break; }
-                        } else {
-                            for (let p = 0; p < feat.coordinates.length; p++) {
-                                if (isPointInPolygon(lat, lng, feat.coordinates[p][0])) { isLand = true; break; }
-                            }
-                        }
-                    }
-
-                    // 陸地なら明るいグレー、海なら透明色を頂点カラーにセット
-                    if (isLand) {
-                        colors.push(0.88, 0.88, 0.88); // 陸地色 (RGB: 0.88 = #dcdcdc)
-                    } else {
-                        colors.push(0.02, 0.06, 0.14); // 海の色と同化
-                    }
-                }
-
-                globeGeom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-                const landMesh = new THREE.Mesh(globeGeom, landMaterial);
-                globeGroup.add(landMesh);
+            .then(json => {
+                geoJsonData = json;
+                drawMap(); // 初期マップ描画
             });
 
-        // 国境線を引くヘルパー
-        function drawBorderLines(coords, material) {
-            const points = [];
-            coords.forEach(coord => {
-                points.push(latLngToVector3(coord[1], coord[0], RADIUS + 0.05));
-            });
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(lineGeometry, material);
-            globeGroup.add(line);
-        }
-
-        // 4. ハイライト表示（ホバーした国だけを完璧な球面で上塗りする仕組み）
-        const highlightMaterial = new THREE.MeshBasicMaterial({
-            color: 0x1e90ff, // 強調表示：鮮やかな青
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.0
-        });
-        const highlightGeom = new THREE.SphereGeometry(RADIUS + 0.03, 100, 100);
-        const highlightMesh = new THREE.Mesh(highlightGeom, highlightMaterial);
-        globeGroup.add(highlightMesh);
-
-        // 特定の国を鮮やかな青で球面ハイライト染めする関数
-        function updateHighlight(targetCountry) {
-            if (!targetCountry) {
-                highlightMaterial.opacity = 0.0;
-                return;
-            }
-
-            const posAttr = highlightGeom.attributes.position;
-            const colors = [];
-
-            for (let i = 0; i < posAttr.count; i++) {
-                const vx = posAttr.getX(i);
-                const vy = posAttr.getY(i);
-                const vz = posAttr.getZ(i);
-
-                const rad = Math.sqrt(vx*vx + vy*vy + vz*vz);
-                const lat = 90 - Math.acos(vy / rad) * (180 / Math.PI);
-                let lng = Math.atan2(-vx, vz) * (180 / Math.PI) - 180;
-                if (lng < -180) lng += 360;
-
-                let match = false;
-                if (targetCountry.type === 'Polygon') {
-                    if (isPointInPolygon(lat, lng, targetCountry.coordinates[0])) match = true;
-                } else {
-                    for (let p = 0; p < targetCountry.coordinates.length; p++) {
-                        if (isPointInPolygon(lat, lng, targetCountry.coordinates[p][0])) { match = true; break; }
-                    }
-                }
-
-                if (match) {
-                    colors.push(0.12, 0.56, 1.0); // 鮮やかな青 (#1e90ff)
-                } else {
-                    colors.push(0, 0, 0); // マッチしない部分は完全ステルス（透明）
-                }
-            }
-
-            highlightGeom.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            highlightGeom.attributes.color.needsUpdate = true;
-            highlightMaterial.opacity = 0.5; // ホバー色を半透明で上書き
-        }
-
-        // 5. 空港ピンの配置
+        // 4. 空港ピンの配置
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
@@ -325,12 +249,11 @@
         scene.add(globeGroup);
         globeGroup.rotation.y = 2.5;
 
-        // 6. マウス操作・ドラッグ・ズーム・ホバー判定
+        // 5. マウス操作・ドラッグ・ズーム・ホバー処理
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        let currentHoveredCountryName = "";
 
         window.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -353,59 +276,62 @@
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
             } else {
-                // 地球儀の表面の座標をレイスキャンして国を逆引き判定
-                const globeIntersects = raycaster.intersectObject(sphere);
+                // 地球儀（球体表面）の交点から国を特定
+                const globeIntersects = raycaster.intersectObject(globeMesh);
                 
-                if (globeIntersects.length > 0) {
+                if (globeIntersects.length > 0 && geoJsonData) {
                     const hitPoint = globeIntersects[0].point;
-                    
-                    // 回転群オブジェクトのローカル座標系に変換
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
+                    
+                    // 3D空間のXYZから物理的な経緯度(Lat/Lng)を安全に逆算
                     const rad = Math.sqrt(localPoint.x*localPoint.x + localPoint.y*localPoint.y + localPoint.z*localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
                     let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI) - 180;
                     if (lng < -180) lng += 360;
 
                     let foundCountry = null;
-                    for (let c = 0; c < countryFeatures.length; c++) {
-                        const feat = countryFeatures[c];
-                        if (feat.type === 'Polygon') {
-                            if (isPointInPolygon(lat, lng, feat.coordinates[0])) { foundCountry = feat; break; }
+                    for (let c = 0; c < geoJsonData.features.length; c++) {
+                        const feat = geoJsonData.features[c];
+                        if (feat.geometry.type === 'Polygon') {
+                            if (isPointInPolygon(lat, lng, feat.geometry.coordinates[0])) { foundCountry = feat; break; }
                         } else {
-                            for (let p = 0; p < feat.coordinates.length; p++) {
-                                if (isPointInPolygon(lat, lng, feat.coordinates[p][0])) { foundCountry = feat; break; }
+                            for (let p = 0; p < feat.geometry.coordinates.length; p++) {
+                                if (isPointInPolygon(lat, lng, feat.geometry.coordinates[p][0])) { foundCountry = feat; break; }
                             }
                         }
                     }
 
                     if (foundCountry) {
+                        const name = foundCountry.properties.NAME_JA || foundCountry.properties.NAME || "Unknown";
+                        const iso2 = foundCountry.properties.ISO_A2 || foundCountry.properties.iso_a2 || "??";
+                        
                         labelEl.style.display = 'block';
                         labelEl.style.left = `${e.clientX}px`;
                         labelEl.style.top = `${e.clientY}px`;
-                        labelEl.innerHTML = `<strong>${foundCountry.name}</strong> (${foundCountry.iso2})`;
+                        labelEl.innerHTML = `<strong>${name}</strong> (${iso2})`;
                         document.body.style.cursor = 'default';
 
-                        // ホバーしている国が変わった瞬間だけハイライトを更新
-                        if (currentHoveredCountryName !== foundCountry.name) {
-                            currentHoveredCountryName = foundCountry.name;
-                            updateHighlight(foundCountry);
+                        // 国が変わった瞬間だけテクスチャ地図を瞬時に1回塗り替え
+                        if (hoveredCountryName !== name) {
+                            hoveredCountryName = name;
+                            drawMap(name);
                         }
                     } else {
-                        // 海の上にいる場合
+                        // 海の上
                         labelEl.style.display = 'none';
                         document.body.style.cursor = 'default';
-                        if(currentHoveredCountryName !== "") {
-                            currentHoveredCountryName = "";
-                            updateHighlight(null);
+                        if (hoveredCountryName !== "") {
+                            hoveredCountryName = "";
+                            drawMap();
                         }
                     }
                 } else {
-                    // 地球の外側にいる場合
+                    // 地球の外
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
-                    if(currentHoveredCountryName !== "") {
-                        currentHoveredCountryName = "";
-                        updateHighlight(null);
+                    if (hoveredCountryName !== "") {
+                        hoveredCountryName = "";
+                        drawMap();
                     }
                 }
             }
@@ -417,6 +343,7 @@
                 y: e.clientY - previousMousePosition.y
             };
 
+            // コロコロ転がす回転の適用
             globeGroup.rotation.y += deltaMove.x * 0.005;
             globeGroup.rotation.x += deltaMove.y * 0.005;
 
@@ -433,6 +360,7 @@
             camera.position.z = currentZoom;
         }, { passive: true });
 
+        // 6. アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
