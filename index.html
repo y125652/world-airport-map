@@ -32,6 +32,7 @@
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"></script>
 </head>
 <body>
 
@@ -57,13 +58,15 @@
         container.appendChild(renderer.domElement);
 
         const globeGroup = new THREE.Group();
-        const sphereGeometry = new THREE.SphereGeometry(RADIUS, 32, 32);
-        const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x3a86ff });
+        const sphereGeometry = new THREE.SphereGeometry(RADIUS, 64, 64); // 球の解像度を上げて歪みを軽減
+        
+        // 海の色を暗い濃紺（ダークネイビー）に変更
+        const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x051026 }); 
         const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         globeGroup.add(sphere);
 
         const cargoAirports = [
-            // アジアー・オセアニア
+            // アジア・オセアニア
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
             { name: "香港国際空港 (HKG)", country: "香港", lat: 22.3080, lng: 113.9185 },
@@ -152,25 +155,23 @@
 
         const countryMeshes = [];
 
-        // 2レターコード（ISO_A2）が確実に格納されているGeoJSONソースへ変更
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
                 const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+                
+                // 通常時は「透明」にして海のベース色を透過させる
                 const countryMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xffffff, 
+                    color: 0x3a86ff, // 地球本来のベースカラー（青）
                     transparent: true, 
-                    opacity: 0.0, 
+                    opacity: 0.0, // 普段は透明にして海の色を出す
                     side: THREE.DoubleSide
                 });
 
                 geoJson.features.forEach(feature => {
                     const type = feature.geometry.type;
                     const coordinates = feature.geometry.coordinates;
-                    
-                    // Natural Earthデータのプロパティ名（NAME_JAがあれば日本語、なければNAME）
                     const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
-                    // 2レターコードプロパティ(ISO_A2)を取得
                     const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
 
                     if (type === 'Polygon') {
@@ -183,49 +184,68 @@
                 });
             });
 
+        // earcutライブラリを使用して複雑な多角形を完全に塗りつぶす新アルゴリズム
         function createCountrySector(polygonCoords, lineMat, meshMat, name, iso2) {
+            // 外郭線
             const outerCoords = polygonCoords[0];
             const points = [];
-            const shape = new THREE.Shape();
+            const flatCoords = [];
+            const holeIndices = [];
 
-            outerCoords.forEach((coord, index) => {
+            outerCoords.forEach(coord => {
                 const lng = coord[0];
                 const lat = coord[1];
-                points.push(latLngToVector3(lat, lng, RADIUS + 0.1));
-
-                if(index === 0) {
-                    shape.moveTo(lng, lat);
-                } else {
-                    shape.lineTo(lng, lat);
-                }
+                points.push(latLngToVector3(lat, lng, RADIUS + 0.08));
+                flatCoords.push(lng, lat);
             });
 
+            // 国境線の描画
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMat);
             globeGroup.add(line);
 
-            try {
-                const shapeGeom = new THREE.ShapeGeometry(shape);
-                const countryMesh = new THREE.Mesh(shapeGeom, meshMat.clone());
+            // 穴（内包する湖など）がある場合のインデックス処理
+            let currentIndex = outerCoords.length;
+            for (let i = 1; i < polygonCoords.length; i++) {
+                holeIndices.push(currentIndex);
+                polygonCoords[i].forEach(coord => {
+                    flatCoords.push(coord[0], coord[1]);
+                });
+                currentIndex += polygonCoords[i].length;
+            }
 
-                const posAttr = countryMesh.geometry.attributes.position;
-                for (let i = 0; i < posAttr.count; i++) {
-                    const lng = posAttr.getX(i);
-                    const lat = posAttr.getY(i);
-                    const v3 = latLngToVector3(lat, lng, RADIUS + 0.05);
-                    posAttr.setXYZ(i, v3.x, v3.y, v3.z);
+            try {
+                // earcut によるポリゴンの三角形分割インデックス計算
+                const triangles = earcut(flatCoords, holeIndices, 2);
+                if (!triangles || triangles.length === 0) return;
+
+                const vertices = [];
+                // フラットな2D経緯度データをすべて3D空間の球面座標にコンバート
+                for (let i = 0; i < flatCoords.length; i += 2) {
+                    const lng = flatCoords[i];
+                    const lat = flatCoords[i + 1];
+                    const v3 = latLngToVector3(lat, lng, RADIUS + 0.03);
+                    vertices.push(v3.x, v3.y, v3.z);
                 }
-                countryMesh.geometry.computeVertexNormals();
-                
+
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geometry.setIndex(triangles);
+                geometry.computeVertexNormals();
+
+                const countryMesh = new THREE.Mesh(geometry, meshMat.clone());
                 countryMesh.userData = { type: 'country', name: name, iso2: iso2 };
+                
                 globeGroup.add(countryMesh);
                 countryMeshes.push(countryMesh);
-            } catch(e) {}
+            } catch (e) {
+                // 例外回避用
+            }
         }
 
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
-        const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
+        const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 }); // ピンの色
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
@@ -287,7 +307,8 @@
                     labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso2})`;
                     document.body.style.cursor = 'default';
 
-                    hitCountry.material.opacity = 0.25;
+                    // カーソルが乗った時だけ透明度を上げて国全体を浮かび上がらせる（強調表示）
+                    hitCountry.material.opacity = 0.4; 
                     lastHoveredCountry = hitCountry;
                 } else {
                     labelEl.style.display = 'none';
