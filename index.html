@@ -3,47 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Globe with World Borders</title>
+    <title>3D Globe with Cargo Airports</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background-color: #ffffff;
+            font-family: Arial, sans-serif;
         }
         #canvas-container {
             width: 100vw;
             height: 100vh;
+        }
+        #airport-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            color: #ffffff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            white-space: nowrap;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+            transform: translate(15px, -50%);
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
 
+    <div id="airport-label"></div>
     <div id="canvas-container"></div>
 
     <script>
         const container = document.getElementById('canvas-container');
+        const labelEl = document.getElementById('airport-label');
         const RADIUS = 70;
 
+        // 1. シーンとカメラの設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 180;
 
+        // 2. レンダラーの設定
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0xffffff, 1);
         container.appendChild(renderer.domElement);
 
+        // 3. 地球（ベースの青い球体）の作成
         const globeGroup = new THREE.Group();
         const sphereGeometry = new THREE.SphereGeometry(RADIUS, 32, 32);
         const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x3a86ff });
         const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
         globeGroup.add(sphere);
 
-        // 経度のマッピング反転（- を付与）を修正した座標変換関数
+        // 4. 世界の主要貨物（フレイター）空港データ
+        const cargoAirports = [
+            { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
+            { name: "香港国際空港 (HKG)", country: "香港", lat: 22.3080, lng: 113.9185 },
+            { name: "メンフィス国際空港 (MEM)", country: "アメリカ", lat: 35.0424, lng: -89.9767 },
+            { name: "アンカレジ国際空港 (ANC)", country: "アメリカ", lat: 61.1744, lng: -149.9964 },
+            { name: "上海浦東国際空港 (PVG)", country: "中国", lat: 31.1443, lng: 121.8083 },
+            { name: "仁川国際空港 (ICN)", country: "韓国", lat: 37.4602, lng: 126.4407 },
+            { name: "台湾桃園国際空港 (TPE)", country: "台湾", lat: 25.0797, lng: 121.2342 },
+            { name: "シンガポール・チャンギ空港 (SIN)", country: "シンガポール", lat: 1.3502, lng: 103.9893 },
+            { name: "フランクフルト空港 (FRA)", country: "ドイツ", lat: 50.0379, lng: 8.5622 },
+            { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 },
+            { name: "ロンドン・ヒースロー空港 (LHR)", country: "イギリス", lat: 51.4700, lng: -0.4543 },
+            { name: "アムステルダム・スキポール空港 (AMS)", country: "オランダ", lat: 52.3105, lng: 4.7683 },
+            { name: "ドバイ国際空港 (DXB)", country: "アラブ首長国連邦", lat: 25.2532, lng: 55.3657 },
+            { name: "カタール・ハマド国際空港 (DOH)", country: "カタール", lat: 25.2611, lng: 51.5651 },
+            { name: "スワンナプーム空港 (BKK)", country: "タイ", lat: 13.6900, lng: 100.7501 },
+            { name: "クアラルンプール国際空港 (KUL)", country: "マレーシア", lat: 2.7456, lng: 101.7072 },
+            { name: "チャトラパティ・シヴァージー国際空港 (BOM)", country: "インド", lat: 19.0896, lng: 72.8656 },
+            { name: "シドニー国際空港 (SYD)", country: "オーストラリア", lat: -33.9461, lng: 151.1772 },
+            { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
+            { name: "オアハカ・ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
+            { name: "O・R・タンボ国際空港 (JNB)", country: "南アフリカ", lat: -26.1367, lng: 28.2460 },
+            { name: "カイロ国際空港 (CAI)", country: "エジプト", lat: 30.1219, lng: 31.4056 },
+            { name: "トロント・ピアソン国際空港 (YYZ)", country: "カナダ", lat: 43.6777, lng: -79.6248 },
+            { name: "メキシコ・シティ国際空港 (MEX)", country: "メキシコ", lat: 19.4361, lng: -99.0719 }
+        ];
+
+        // 5. 座標変換関数 (経度のマッピング反転修正済み)
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (-lng + 180) * (Math.PI / 180); // 経度の正負を反転させてミラーを解消
+            const theta = (-lng + 180) * (Math.PI / 180);
 
             const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
@@ -52,6 +99,7 @@
             return new THREE.Vector3(x, y, z);
         }
 
+        // 6. 世界の国境線を描画
         fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
@@ -74,9 +122,7 @@
         function drawPolygon(coords, material) {
             const points = [];
             coords.forEach(coord => {
-                const lng = coord[0];
-                const lat = coord[1];
-                points.push(latLngToVector3(lat, lng, RADIUS + 0.3));
+                points.push(latLngToVector3(coord[1], coord[0], RADIUS + 0.1));
             });
 
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -84,13 +130,28 @@
             globeGroup.add(line);
         }
 
-        scene.add(globeGroup);
+        // 7. 空港ピンの配置
+        const pins = [];
+        const pinGeometry = new THREE.SphereGeometry(1.2, 16, 16);
+        const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 }); // 目立つピンクのピン
 
-        // 初期状態で日本付近が正面を向くように調整
+        cargoAirports.forEach(airport => {
+            const pin = new THREE.Mesh(pinGeometry, pinMaterial);
+            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.4);
+            pin.position.copy(pos);
+            pin.userData = { name: airport.name, country: airport.country };
+            globeGroup.add(pin);
+            pins.push(pin); // レイキャスト判定用
+        });
+
+        scene.add(globeGroup);
         globeGroup.rotation.y = 2.5;
 
+        // 8. マウス操作とドラッグの実装
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
 
         window.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -98,6 +159,24 @@
         });
 
         window.addEventListener('mousemove', (e) => {
+            // ホバーによる空港ラベル表示
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            
+            const intersects = raycaster.intersectObjects(pins);
+            if (intersects.length > 0) {
+                const data = intersects[0].object.userData;
+                labelEl.style.display = 'block';
+                labelEl.style.left = `${e.clientX}px`;
+                labelEl.style.top = `${e.clientY}px`;
+                labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
+                document.body.style.cursor = 'pointer';
+            } else {
+                labelEl.style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+
             if (!isDragging) return;
 
             const deltaMove = {
@@ -105,7 +184,6 @@
                 y: e.clientY - previousMousePosition.y
             };
 
-            // マウスの操作方向と地球儀の回転方向を一致させる
             globeGroup.rotation.y += deltaMove.x * 0.005;
             globeGroup.rotation.x += deltaMove.y * 0.005;
 
@@ -116,6 +194,7 @@
             isDragging = false;
         });
 
+        // 9. 描画ループ
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
