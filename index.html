@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D World Map - Lightweight Version</title>
+    <title>3D World Map - Full Fix</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         #globeViz { width: 100vw; height: 100vh; }
-        .backdrop { background: rgba(0, 0, 0, 0.85) !important; border-radius: 8px !important; padding: 12px !important; border: 1px solid #555; color: #fff; }
+        .backdrop { background: rgba(0, 0, 0, 0.9) !important; border-radius: 8px !important; padding: 12px !important; border: 1px solid #555; color: #fff; }
         .tt-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; border-bottom: 1px solid #aaa; padding-bottom: 4px; }
         .tt-body { font-size: 12px; }
     </style>
@@ -26,10 +26,10 @@
         };
 
         const tcColors = {
-            'TC1': 'rgba(46, 204, 113, 0.5)',  // 緑
-            'TC2': 'rgba(52, 152, 219, 0.5)',  // 青
-            'TC3': 'rgba(241, 196, 15, 0.5)',  // 黄
-            'Unknown': 'rgba(150, 150, 150, 0.3)'
+            'TC1': 'rgba(46, 204, 113, 0.4)',  // 緑
+            'TC2': 'rgba(52, 152, 219, 0.4)',  // 青
+            'TC3': 'rgba(241, 196, 15, 0.4)',  // 黄
+            'Unknown': 'rgba(150, 150, 150, 0.2)' // データがない国は薄いグレー
         };
 
         // 主要空港データ
@@ -45,31 +45,32 @@
             { name: "ロサンゼルス国際空港", code: "LAX", country: "US", lat: 33.9416, lng: -118.4085 }
         ];
 
-        const world = Globe()
-            (document.getElementById('globeViz'))
+        // 3D地球儀の初期化
+        const world = Globe()(document.getElementById('globeViz'))
             .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
             .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-            // 【軽量化策①】ポリゴンの描画精度を少し下げて計算を高速化
-            .polygonBorderColor(() => '#ffffff')
-            .polygonResolution(1); 
+            .polygonResolution(1); // 軽さ重視設定
 
-        // 【軽量化策②】読み込み元を「1:110mスケール（超軽量版）」のデータに変更
-        fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
+        // データの安全な読み込み（安定している別の軽量リポジトリから取得します）
+        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
             .then(res => res.json())
             .then(countries => {
                 
                 world
+                    // --- ① 国境線と色分けの復活 ---
                     .polygonsData(countries.features)
-                    .polygonStrokeColor(() => 'rgba(255,255,255,0.6)') // 国境線を少し透過して描画負荷軽減
+                    .polygonStrokeColor(() => 'rgba(255, 255, 255, 0.7)') // 白い国境線
                     .polygonCapColor(d => {
-                        // 2レターコードの取得先を軽量版のデータ構造（ISO_A2_EH または ISO_A2）に合わせる
-                        const code2 = d.properties.ISO_A2_EH || d.properties.ISO_A2 || d.properties.postal;
+                        const code2 = d.properties.ISO_A2;
+                        // コードが存在しない（-99など）場合のバグ対策
+                        if (!code2 || code2 === '-99') return tcColors['Unknown'];
                         const tc = tcMapping[code2] || 'Unknown';
                         return tcColors[tc];
                     })
+                    // --- ② マウスホバー時の国名・空港名表示 ---
                     .polygonLabel(d => {
-                        const name = d.properties.NAME_JA || d.properties.NAME || "不明";
-                        const code2 = d.properties.ISO_A2_EH || d.properties.ISO_A2 || d.properties.postal;
+                        const name = d.properties.ADMIN || "不明の国";
+                        const code2 = d.properties.ISO_A2 || "??";
                         
                         const localAirports = airportsData.filter(ap => ap.country === code2);
                         let airportListHTML = localAirports.length > 0 
@@ -86,23 +87,32 @@
                             </div>
                         `;
                     })
+                    // ホバー時の色変化
                     .onPolygonHover(hoverObj => world
-                        .polygonCapColor(d => d === hoverObj ? 'rgba(255, 255, 255, 0.6)' : tcColors[tcMapping[d.properties.ISO_A2_EH || d.properties.ISO_A2 || d.properties.postal] || 'Unknown'])
-                    )
+                        .polygonCapColor(d => {
+                            if (d === hoverObj) return 'rgba(255, 255, 255, 0.5)';
+                            const code2 = d.properties.ISO_A2;
+                            const tc = (!code2 || code2 === '-99') ? 'Unknown' : (tcMapping[code2] || 'Unknown');
+                            return tcColors[tc];
+                        })
+                    );
 
-                    // 空港ピンの設定
+                // --- ③ 空港ピンと3レターコードの表示（重なり防止） ---
+                world
                     .labelsData(airportsData)
                     .labelLat(d => d.lat)
                     .labelLng(d => d.lng)
-                    .labelText(d => `${d.code}`)
-                    .labelSize(1.5)
-                    .labelDotRadius(0.5)
-                    .labelColor(() => '#ff4757')
-                    // 【軽量化策③】文字の重なり防止計算を「静的」にして回転中の負荷を減らす
+                    .labelText(d => d.code) // 空港名（3レター）
+                    .labelSize(1.8)        // 文字の大きさ
+                    .labelDotRadius(0.6)   // ピン（ドット）の大きさ
+                    .labelColor(() => '#ff4757') // 赤いピン
+                    .labelResolution(2)
                     .labelsTransitionDuration(0);
 
-                world.pointOfView({ lat: 35, lng: 139, altitude: 2.5 });
-            });
+                // 初期カメラ位置（日本）
+                world.pointOfView({ lat: 35, lng: 139, altitude: 2.3 });
+            })
+            .catch(err => console.error("データ読み込みエラー:", err));
     </script>
 </body>
 </html>
