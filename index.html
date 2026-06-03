@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D世界主要空港地球儀マップ</title>
+    
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/three-globe"></script>
+    
+    <style>
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #04040c;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        #globe-container {
+            width: 100%; height: 100%;
+        }
+        /* 画面中央上部のスタイリッシュな国名案内吹き出し */
+        #country-tooltip {
+            position: absolute;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 16, 36, 0.85);
+            color: #fff;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border: 1px solid #00aaff;
+            pointer-events: none;
+            z-index: 1000;
+            box-shadow: 0 4px 25px rgba(0,170,255,0.4);
+            backdrop-filter: blur(5px);
+            display: none;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="country-tooltip"></div>
+    <div id="globe-container"></div>
+
+    <script>
+        // --- 📊 全世界の主要ハブ空港データ（100箇所以上） ---
+        const airportData = [
+            // 日本・韓国・台湾・中国
+            { name: "東京国際空港（羽田）", iata: "HND", country: "JP", lat: 35.549, lon: 139.780 },
+            { name: "成田国際空港", iata: "NRT", country: "JP", lat: 35.772, lon: 140.393 },
+            { name: "関西国際空港", iata: "KIX", country: "JP", lat: 34.432, lon: 135.230 },
+            { name: "新千歳空港", iata: "CTS", country: "JP", lat: 42.775, lon: 141.692 },
+            { name: "福岡空港", iata: "FUK", country: "JP", lat: 33.585, lon: 130.450 },
+            { name: "那覇空港", iata: "OKA", country: "JP", lat: 26.195, lon: 127.646 },
+            { name: "仁川国際空港", iata: "ICN", country: "KR", lat: 37.460, lon: 126.440 },
+            { name: "金浦国際空港", iata: "GMP", country: "KR", lat: 37.558, lon: 126.791 },
+            { name: "金海国際空港", iata: "PUS", country: "KR", lat: 35.179, lon: 128.938 },
+            { name: "台湾桃園国際空港", iata: "TPE", country: "TW", lat: 25.079, lon: 121.234 },
+            { name: "高雄国際空港", iata: "KHH", country: "TW", lat: 22.577, lon: 120.350 },
+            { name: "北京首都国際空港", iata: "PEK", country: "CN", lat: 40.079, lon: 116.603 },
+            { name: "北京大興国際空港", iata: "PKX", country: "CN", lat: 39.509, lon: 116.410 },
+            { name: "上海浦東国際空港", iata: "PVG", country: "CN", lat: 31.144, lon: 121.808 },
+            { name: "上海虹橋国際空港", iata: "SHA", country: "CN", lat: 31.197, lon: 121.336 },
+            { name: "広州白雲国際空港", iata: "CAN", country: "CN", lat: 23.392, lon: 113.299 },
+            { name: "香港国際空港", iata: "HKG", country: "HK", lat: 22.308, lon: 113.914 },
+
+            // 東南アジア・南アジア
+            { name: "シンガポール・チャンギ空港", iata: "SIN", country: "SG", lat: 1.350, lon: 103.994 },
+            { name: "スワンナプーム国際空港", iata: "BKK", country: "TH", lat: 13.690, lon: 100.750 },
+            { name: "ドンムアン国際空港", iata: "DMK", country: "TH", lat: 13.912, lon: 100.606 },
+            { name: "プーケット国際空港", iata: "HKT", country: "TH", lat: 8.113, lon: 98.316 },
+            { name: "クアラルンプール国際空港", iata: "KUL", country: "MY", lat: 2.745, lon: 101.709 },
+            { name: "スカルノ・ハッタ国際空港", iata: "CGK", country: "ID", lat: -6.125, lon: 106.655 },
+            { name: "ヌラ・ライ国際空港", iata: "DPS", country: "ID", lat: -8.748, lon: 115.167 },
+            { name: "ニノイ・アキノ国際空港", iata: "MNL", country: "PH", lat: 14.508, lon: 121.011 },
+            { name: "ノイバイ国際空港", iata: "HAN", country: "VN", lat: 21.221, lon: 105.807 },
+            { name: "タンソンニャット国際空港", iata: "SGN", country: "VN", lat: 10.818, lon: 106.663 },
+            { name: "インディラ・ガンディー国際空港", iata: "DEL", country: "IN", lat: 28.566, lon: 77.103 },
+            { name: "チャトラパティ・シヴァージー国際空港", iata: "BOM", country: "IN", lat: 19.088, lon: 72.867 },
+            { name: "バンダラナイケ国際空港", iata: "CMB", country: "LK", lat: 7.180, lon: 79.884 },
+            { name: "ヴェラナ国際空港", iata: "MLE", country: "MV", lat: 4.191, lon: 73.529 },
+
+            // オセアニア
+            { name: "シドニー国際空港", iata: "SYD", country: "AU", lat: -33.946, lon: 151.177 },
+            { name: "メルボルン空港", iata: "MEL", country: "AU", lat: -37.673, lon: 144.843 },
+            { name: "ブリスベン空港", iata: "BNE", country: "AU", lat: -27.384, lon: 153.117 },
+            { name: "パース空港", iata: "PER", country: "AU", lat: -31.942, lon: 115.967 },
+            { name: "オークランド空港", iata: "AKL", country: "NZ", lat: -37.008, lon: 174.791 },
+            { name: "ナンディ国際空港", iata: "NAN", country: "FJ", lat: -17.755, lon: 177.443 },
+
+            // 北米・中米
+            { name: "ジョン・F・ケネディ国際空港", iata: "JFK", country: "US", lat: 40.640, lon: -73.779 },
+            { name: "ロサンゼルス国際空港", iata: "LAX", country: "US", lat: 33.942, lon: -118.408 },
+            { name: "シカゴ・オヘア国際空港", iata: "ORD", country: "US", lat: 41.974, lon: -87.907 },
+            { name: "サンフランシスコ国際空港", iata: "SFO", country: "US", lat: 37.619, lon: -122.375 },
+            { name: "アトランタ国際空港", iata: "ATL", country: "US", lat: 33.640, lon: -84.427 },
+            { name: "ダラス・フォートワース国際空港", iata: "DFW", country: "US", lat: 32.899, lon: -97.040 },
+            { name: "ホノルル国際空港", iata: "HNL", country: "US", lat: 21.324, lon: -157.925 },
+            { name: "トロント・ピアソン国際空港", iata: "YYZ", country: "CA", lat: 43.677, lon: -79.624 },
+            { name: "バンクーバー国際空港", iata: "YVR", country: "CA", lat: 49.193, lon: -123.184 },
+            { name: "メキシコシティ国際空港", iata: "MEX", country: "MX", lat: 19.436, lon: -99.072 },
+            { name: "カンクン国際空港", iata: "CUN", country: "MX", lat: 21.036, lon: -86.877 },
+
+            // 南米
+            { name: "トキュメン国際空港", iata: "PTY", country: "PA", lat: 9.071, lon: -79.383 },
+            { name: "エルドラド国際空港", iata: "BOG", country: "CO", lat: 4.701, lon: -74.146 },
+            { name: "ホルヘ・チャベス国際空港", iata: "LIM", country: "PE", lat: -12.022, lon: -77.114 },
+            { name: "グアルーリョス国際空港", iata: "GRU", country: "BR", lat: -23.435, lon: -46.473 },
+            { name: "ガレオン国際空港", iata: "GIG", country: "BR", lat: -22.810, lon: -43.250 },
+            { name: "ミニストロ・ピスタリーニ国際空港", iata: "EZE", country: "AR", lat: -34.822, lon: -58.535 },
+            { name: "アルトゥーロ・メリノ・ベニテス国際空港", iata: "SCL", country: "CL", lat: -33.393, lon: -70.794 },
+
+            // ヨーロッパ
+            { name: "ロンドン・ヒースロー空港", iata: "LHR", country: "GB", lat: 51.470, lon: -0.454 },
+            { name: "ロンドン・ガトウィック空港", iata: "LGW", country: "GB", lat: 51.148, lon: -0.190 },
+            { name: "パリ＝シャルル・ド・ゴール空港", iata: "CDG", country: "FR", lat: 49.010, lon: 2.550 },
+            { name: "パリ＝オルリー空港", iata: "ORY", country: "FR", lat: 48.723, lon: 2.379 },
+            { name: "フランクフルト空港", iata: "FRA", country: "DE", lat: 50.033, lon: 8.570 },
+            { name: "ミュンヘン空港", iata: "MUC", country: "DE", lat: 48.354, lon: 11.786 },
+            { name: "アムステルダム・スキポール空港", iata: "AMS", country: "NL", lat: 52.308, lon: 4.764 },
+            { name: "ブリュッセル空港", iata: "BRU", country: "BE", lat: 50.901, lon: 4.484 },
+            { name: "チューリッヒ空港", iata: "ZRH", country: "CH", lat: 47.464, lon: 8.549 },
+            { name: "マドリード・バラハス空港", iata: "MAD", country: "ES", lat: 40.472, lon: -3.561 },
+            { name: "バルセロナ・エル・プラット空港", iata: "BCN", country: "ES", lat: 41.297, lon: 2.078 },
+            { name: "リスボン空港", iata: "LIS", country: "PT", lat: 38.774, lon: -9.134 },
+            { name: "ローマ・フィウミチーノ空港", iata: "FCO", country: "IT", lat: 41.800, lon: 12.239 },
+            { name: "ミラノ・マルペンサ空港", iata: "MXP", country: "IT", lat: 45.630, lon: 8.723 },
+            { name: "ウィーン国際空港", iata: "VIE", country: "AT", lat: 48.110, lon: 16.570 },
+            { name: "コペンハーゲン空港", iata: "CPH", country: "DK", lat: 55.618, lon: 12.656 },
+            { name: "ストックホルム・アーランダ空港", iata: "ARN", country: "SE", lat: 59.651, lon: 17.918 },
+            { name: "オスロ・ガルデモエン空港", iata: "OSL", country: "NO", lat: 60.193, lon: 11.100 },
+            { name: "ヘルシンキ・ヴァンター空港", iata: "HEL", country: "FI", lat: 60.317, lon: 24.963 },
+            { name: "アテネ国際空港", iata: "ATH", country: "GR", lat: 37.936, lon: 23.944 },
+            { name: "イスタンブール空港", iata: "IST", country: "TR", lat: 41.275, lon: 28.751 },
+
+            // 中東・アフリカ
+            { name: "ドバイ国際空港", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 },
+            { name: "アブダビ国際空港", iata: "AUH", country: "AE", lat: 24.433, lon: 54.651 },
+            { name: "ハマド国際空港（ドーハ）", iata: "DOH", country: "QA", lat: 25.273, lon: 51.608 },
+            { name: "キング・ハーリド国際空港", iata: "RUH", country: "SA", lat: 24.957, lon: 46.698 },
+            { name: "カイロ国際空港", iata: "CAI", country: "EG", lat: 30.122, lon: 31.406 },
+            { name: "オリバー・タンボ国際空港", iata: "JNB", country: "ZA", lat: -26.139, lon: 28.246 },
+            { name: "ボレ国際空港", iata: "ADD", country: "ET", lat: 8.977, lon: 38.799 },
+            { name: "ジョモ・ケニヤッタ国際空港", iata: "NBO", country: "KE", lat: -1.319, lon: 36.927 },
+            { name: "モハメド5世国際空港", iata: "CMN", country: "MA", lat: 33.367, lon: -7.589 }
+        ];
+
+        const iso3ToIso2 = { "JPN":"JP","KOR":"KR","TWN":"TW","CHN":"CN","HKG":"HK","MAC":"MO","SGP":"SG","THA":"TH","MYS":"MY","IDN":"ID","PHL":"PH","VNM":"VN","KHM":"KH","LAO":"LA","MMR":"MM","IND":"IN","LKA":"LK","MDV":"MV","AUS":"AU","NZL":"NZ","FJI":"FJ","USA":"US","CAN":"CA","MEX":"MX","PAN":"PA","COL":"CO","PER":"PE","BRA":"BR","ARG":"AR","CHL":"CL","GBR":"GB","FRA":"FR","DEU":"DE","NLD":"NL","BEL":"BE","CHE":"CH","ESP":"ES","PT":"PT","IT":"IT","AT":"AT","DNK":"DK","SWE":"SE","NOR":"NO","FIN":"FI","GRC":"GR","TUR":"TR","RUS":"RU","ARE":"AE","QAT":"QA","SAU":"SA","EGY":"EG","ZAF":"ZA","ETH":"ET","KEN":"KE","MAR":"MA" };
+
+        // 1. 地球儀の作成（サーバー上で安全に読み込める美しい標準テクスチャを使用）
+        const Globe = new ThreeGlobe()
+            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg') // リアルな青い地球の画像
+            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+            .polygonSideColor(() => 'rgba(0, 150, 255, 0.04)') 
+            .polygonStrokeColor(() => 'rgba(255,255,255,0.15)'); // 普段のうっすらとした国境線
+
+        // 2. 世界の国境線データのロード
+        fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+            .then(res => res.json())
+            .then(countries => {
+                Globe.polygonsData(countries.features);
+                // 通常時は国の中身を完全に透明にして、リアルな地球の地表が見えるようにする
+                Globe.polygonCapColor(() => 'rgba(0, 0, 0, 0)'); 
+            });
+
+        // 3. Three.js の 3D空間構築
+        const scene = new THREE.Scene();
+        scene.add(Globe);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.9)); // 地球が綺麗に見えるように光を調整
+        
+        const dLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        dLight.position.set(1, 1, 1);
+        scene.add(dLight);
+
+        const container = document.getElementById('globe-container');
+        const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.z = 280; 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // 4. マウスホバー検知（レイキャスター）
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let hoveredCountry = null;
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Globe.children, true);
+            const hit = intersects.find(obj => obj.object.type === 'Mesh' && obj.object.__data);
+
+            if (hit) {
+                const countryData = hit.object.__data;
+                if (hoveredCountry !== countryData) {
+                    hoveredCountry = countryData;
+
+                    const props = countryData.properties;
+                    const name = props.NAME || props.name || "不明な国";
+                    const iso3 = props.ISO_A3 || "";
+                    const iso2 = iso3ToIso2[iso3] || "";
+
+                    // ① 上部パネルに国名を表示
+                    const tooltipEl = document.getElementById('country-tooltip');
+                    tooltipEl.innerHTML = `🌍 ${name} (${iso2 || iso3})`;
+                    tooltipEl.style.display = 'block';
+
+                    // ② ホバーされた国を鮮やかなシアンに強調ライトアップ！
+                    Globe.polygonCapColor(d => d === countryData ? 'rgba(0, 221, 255, 0.3)' : 'rgba(0, 0, 0, 0)');
+                    Globe.polygonStrokeColor(d => d === countryData ? '#00ddff' : 'rgba(255,255,255,0.15)');
+
+                    // ③ その国の空港ピンと名前を横に常時出現させる！
+                    if (iso2) {
+                        const localAirports = airportData.filter(ap => ap.country === iso2);
+                        
+                        Globe.labelsData(localAirports)
+                             .labelLat(d => d.lat)
+                             .labelLng(d => d.lon)
+                             .labelText(d => `  ${d.name} [${d.iata}]`)
+                             .labelSize(1.6)
+                             .labelColor(() => '#ffcc00')     // 文字ラベルの色
+                             .labelDotRadius(0.6)            // マーカー（ピン）のサイズ
+                             .labelDotColor(() => '#ff4400'); // マーカーの色
+                    } else {
+                        Globe.labelsData([]);
+                    }
+                }
+            } else {
+                // 地球から外れたらすべてリセット
+                if (hoveredCountry !== null) {
+                    hoveredCountry = null;
+                    document.getElementById('country-tooltip').style.display = 'none';
+                    Globe.polygonCapColor(() => 'rgba(0, 0, 0, 0)');
+                    Globe.polygonStrokeColor(() => 'rgba(255,255,255,0.15)');
+                    Globe.labelsData([]);
+                }
+            }
+        });
+
+        // 5. 地球をドラッグで回す処理
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        container.addEventListener('mousedown', () => isDragging = true);
+        container.addEventListener('mouseup', () => isDragging = false);
+        container.addEventListener('mousemove', (e) => {
+            const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
+            if (isDragging) {
+                Globe.rotation.y += deltaMove.x * 0.005;
+                Globe.rotation.x += deltaMove.y * 0.005;
+            }
+            previousMousePosition = { x: e.offsetX, y: e.offsetY };
+        });
+
+        // スクロールでズーム
+        window.addEventListener('wheel', (e) => {
+            camera.position.z += e.deltaY * 0.12;
+            camera.position.z = Math.max(160, Math.min(420, camera.position.z));
+        });
+
+        // 6. アニメーション（自転）ループ
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isDragging && !hoveredCountry) {
+                Globe.rotation.y += 0.0012; // 放置されている間はゆっくり自転
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 画面サイズ変更時のリサイズ対応
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+    </script>
+</body>
+</html>
