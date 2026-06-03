@@ -41,54 +41,110 @@
     </div>
 
     <script>
-        // --- 📊 全世界の主要空港データ ---
+        // --- 📊 全世界の主要空港データ（100箇所以上・常にピンが表示されます） ---
         const airportData = [
-            // 🇯🇵 日本の主要空港
+            // 🇯🇵 日本（全国主要都市網羅）
             { name: "東京国際空港（羽田）", iata: "HND", country: "JP", lat: 35.549, lon: 139.780 },
             { name: "成田国際空港", iata: "NRT", country: "JP", lat: 35.772, lon: 140.393 },
             { name: "関西国際空港", iata: "KIX", country: "JP", lat: 34.432, lon: 135.230 },
+            { name: "大阪国際空港（伊丹）", iata: "ITM", country: "JP", lat: 34.785, lon: 135.438 },
+            { name: "中部国際空港（セントレア）", iata: "NGO", country: "JP", lat: 34.858, lon: 136.805 },
             { name: "新千歳空港", iata: "CTS", country: "JP", lat: 42.775, lon: 141.692 },
             { name: "福岡空港", iata: "FUK", country: "JP", lat: 33.585, lon: 130.450 },
             { name: "那覇空港", iata: "OKA", country: "JP", lat: 26.195, lon: 127.646 },
-            
-            // 🌎 世界の主要空港
+            { name: "仙台空港", iata: "SDJ", country: "JP", lat: 38.139, lon: 140.916 },
+            { name: "広島空港", iata: "HIJ", country: "JP", lat: 34.440, lon: 132.919 },
+            { name: "鹿児島空港", iata: "KOJ", country: "JP", lat: 31.803, lon: 130.719 },
+
+            // 🇰🇷 韓国
             { name: "仁川国際空港", iata: "ICN", country: "KR", lat: 37.460, lon: 126.440 },
+            { name: "金浦国際空港", iata: "GMP", country: "KR", lat: 37.558, lon: 126.791 },
+            { name: "金海国際空港（釜山）", iata: "PUS", country: "KR", lat: 35.179, lon: 128.938 },
+            { name: "済州国際空港", iata: "CJU", country: "KR", lat: 33.511, lon: 126.493 },
+
+            // 🇹🇼 台湾
             { name: "台湾桃園国際空港", iata: "TPE", country: "TW", lat: 25.079, lon: 121.234 },
+            { name: "台北松山空港", iata: "TSA", country: "TW", lat: 25.069, lon: 121.552 },
+            { name: "高雄国際空港", iata: "KHH", country: "TW", lat: 22.577, lon: 120.350 },
+
+            // 🇨🇳 中国・香港・マカオ
             { name: "北京首都国際空港", iata: "PEK", country: "CN", lat: 40.079, lon: 116.603 },
-            { name: "ジョン・F・ケネディ国際空港", iata: "JFK", country: "US", lat: 40.641, lon: -73.778 },
+            { name: "北京大興国際空港", iata: "PKX", country: "CN", lat: 39.509, lon: 116.410 },
+            { name: "上海浦東国際空港", iata: "PVG", country: "CN", lat: 31.144, lon: 121.808 },
+            { name: "上海虹橋国際空港", iata: "SHA", country: "CN", lat: 31.197, lon: 121.336 },
+            { name: "広州白雲国際空港", iata: "CAN", country: "CN", lat: 23.392, lon: 113.299 },
+            { name: "成都天府国際空港", iata: "TFU", country: "CN", lat: 30.312, lon: 104.442 },
+            { name: "香港国際空港", iata: "HKG", country: "HK", lat: 22.308, lon: 113.914 },
+            { name: "マカオ国際空港", iata: "MFM", country: "MO", lat: 22.149, lon: 113.591 },
+
+            // 🇸🇬 🇹🇭 🇲🇾 🇮🇩 東南アジア
+            { name: "シンガポール・チャンギ空港", iata: "SIN", country: "SG", lat: 1.350, lon: 103.994 },
+            { name: "スワンナプーム国際空港", iata: "BKK", country: "TH", lat: 13.690, lon: 100.750 },
+            { name: "ドンムアン国際空港", iata: "DMK", country: "TH", lat: 13.912, lon: 100.606 },
+            { name: "プーケット国際空港", iata: "HKT", country: "TH", lat: 8.113, lon: 98.316 },
+            { name: "クアラルンプール国際空港", iata: "KUL", country: "MY", lat: 2.745, lon: 101.709 },
+            { name: "スカルノ・ハッタ国際空港", iata: "CGK", country: "ID", lat: -6.125, lon: 106.655 },
+            { name: "ヌラ・ライ国際空港（バリ）", iata: "DPS", country: "ID", lat: -8.748, lon: 115.167 },
+            { name: "ニノイ・アキノ国際空港（マニラ）", iata: "MNL", country: "PH", lat: 14.508, lon: 121.011 },
+            { name: "ノイバイ国際空港（ハノイ）", iata: "HAN", country: "VN", lat: 21.221, lon: 105.807 },
+            { name: "タンソンニャット国際空港", iata: "SGN", country: "VN", lat: 10.818, lon: 106.663 },
+
+            // 🇺🇸 北米・カナダ
+            { name: "ジョン・F・ケネディ国際空港", iata: "JFK", country: "US", lat: 40.640, lon: -73.779 },
+            { name: "ロサンゼルス国際空港", iata: "LAX", country: "US", lat: 33.942, lon: -118.408 },
+            { name: "シカゴ・オヘア国際空港", iata: "ORD", country: "US", lat: 41.974, lon: -87.907 },
+            { name: "サンフランシスコ国際空港", iata: "SFO", country: "US", lat: 37.619, lon: -122.375 },
+            { name: "アトランタ国際空港", iata: "ATL", country: "US", lat: 33.640, lon: -84.427 },
+            { name: "ダラス・フォートワース国際空港", iata: "DFW", country: "US", lat: 32.899, lon: -97.040 },
+            { name: "シアトル・タコマ国際空港", iata: "SEA", country: "US", lat: 47.448, lon: -122.308 },
+            { name: "ダレス国際空港（ワシントン）", iata: "IAD", country: "US", lat: 38.944, lon: -77.456 },
+            { name: "ホノルル国際空港", iata: "HNL", country: "US", lat: 21.324, lon: -157.925 },
+            { name: "トロント・ピアソン国際空港", iata: "YYZ", country: "CA", lat: 43.677, lon: -79.624 },
+            { name: "バンクーバー国際空港", iata: "YVR", country: "CA", lat: 49.193, lon: -123.184 },
+
+            // 🇪🇺 🇬🇧 ヨーロッパ・中東
             { name: "ロンドン・ヒースロー空港", iata: "LHR", country: "GB", lat: 51.470, lon: -0.454 },
-            { name: "パリ＝シャルル・ド・ゴール空港", iata: "CDG", country: "FR", lat: 49.009, lon: 2.547 },
-            { name: "ドバイ国際空港", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 }
+            { name: "ロンドン・ガトウィック空港", iata: "LGW", country: "GB", lat: 51.148, lon: -0.190 },
+            { name: "パリ＝シャルル・ド・ゴール空港", iata: "CDG", country: "FR", lat: 49.010, lon: 2.550 },
+            { name: "フランクフルト空港", iata: "FRA", country: "DE", lat: 50.033, lon: 8.570 },
+            { name: "ミュンヘン空港", iata: "MUC", country: "DE", lat: 48.354, lon: 11.786 },
+            { name: "アムステルダム・スキポール空港", iata: "AMS", country: "NL", lat: 52.308, lon: 4.764 },
+            { name: "マドリード・バラハス空港", iata: "MAD", country: "ES", lat: 40.472, lon: -3.561 },
+            { name: "ローマ・フィウミチーノ空港", iata: "FCO", country: "IT", lat: 41.800, lon: 12.239 },
+            { name: "イスタンブール空港", iata: "IST", country: "TR", lat: 41.275, lon: 28.751 },
+            { name: "ドバイ国際空港", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 },
+            { name: "ハマド国際空港（ドーハ）", iata: "DOH", country: "QA", lat: 25.273, lon: 51.608 },
+
+            // 🇦🇺 オセアニア・その他
+            { name: "シドニー国際空港", iata: "SYD", country: "AU", lat: -33.946, lon: 151.177 },
+            { name: "メルボルン空港", iata: "MEL", country: "AU", lat: -37.673, lon: 144.843 },
+            { name: "オークランド空港", iata: "AKL", country: "NZ", lat: -37.008, lon: 174.791 }
         ];
 
-        // 🔎 【最重要修正】地図データの数値IDから2文字の国コード（空港連動用）へ変換する完全なテーブル
+        // TopoJSONの数値IDから、2文字の国コード（ISO_A2）への対応マップ
         const idToIso2 = {
-            "392": "JP", // 日本
-            "410": "KR", // 韓国
-            "158": "TW", // 台湾
-            "156": "CN", // 中国
-            "840": "US", // アメリカ
-            "826": "GB", // イギリス
-            "250": "FR", // フランス
-            "784": "AE"  // アラブ首長国連邦
+            "392":"JP", "410":"KR", "158":"TW", "156":"CN", "344":"HK", "446":"MO", "702":"SG", "764":"TH", 
+            "458":"MY", "360":"ID", "608":"PH", "704":"VN", "840":"US", "124":"CA", "826":"GB", "250":"FR", 
+            "276":"DE", "528":"NL", "724":"ES", "380":"IT", "792":"TR", "784":"AE", "634":"QA", "036":"AU", "554":"NZ"
         };
 
         const width = window.innerWidth;
         const height = window.innerHeight;
-        const sensitivity = 0.15; // 🔄 滑らかで扱いやすいドラッグ回転感度
+        // 🔄 回転感度をさらに低く（0.12まで下げて絶妙な滑らかさに変更）
+        const sensitivity = 0.12; 
 
         const svg = d3.select("#globe")
             .attr("width", width)
             .attr("height", height);
 
-        // 3D地球儀（正射投影法）の設定
+        // 3D地球儀の設定
         const projection = d3.geoOrthographic()
             .scale(280)
             .translate([width / 2, height / 2]);
 
         const path = d3.geoPath().projection(projection);
 
-        // 🌊 海の描写（完全に不透明な深海ネイビーで視認性を確保）
+        // 🌊 海（完全に不透明な深海ディープネイビー）
         const ocean = svg.append("circle")
             .attr("cx", width / 2)
             .attr("cy", height / 2)
@@ -96,10 +152,12 @@
             .style("fill", "#0a1128")
             .style("stroke", "none");
 
-        const mapGroup = svg.append("g");  // 陸地レイヤー
-        const pinsGroup = svg.append("g"); // 空港レイヤー
+        const mapGroup = svg.append("g");  // 陸地
+        const pinsGroup = svg.append("g"); // 空港（常時表示用）
 
-        // 🗺️ 世界地図（世界標準のTopoJSON）をロード
+        let currentActiveCountry = ""; // 現在ホバーされている国のコード
+
+        // 🗺️ 世界標準データ（TopoJSON）をロード
         d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
             .then(function(world) {
                 const countries = topojson.feature(world, world.objects.countries).features;
@@ -110,38 +168,41 @@
                     .enter().append("path")
                     .attr("class", "country")
                     .attr("d", path)
-                    // 海と完全に色を切り分けた「ソリッドグレー」
                     .style("fill", "#1f3147")
                     .style("stroke", "#2d4460")
                     .style("stroke-width", "1px")
                     
-                    // 🔎 マウスホバーイベント
+                    // 🔎 マウスホバー処理
                     .on("mouseover", function(event, d) {
                         const name = d.properties.name || "不明な国";
-                        const countryId = String(d.id); // 地図データ固有の数値ID
-                        const iso2 = idToIso2[countryId] || ""; // 2文字コードに変換
+                        const countryId = String(d.id);
+                        const iso2 = idToIso2[countryId] || "";
 
-                        // ① 国名を上部に表示
+                        currentActiveCountry = iso2;
+
+                        // ① 国名を上部にシンプルに表示
                         d3.select("#tooltip")
                             .html(`🌍 ${name} ${iso2 ? '(' + iso2 + ')' : ''}`)
                             .style("display", "block");
 
-                        // ② 国全体を鮮やかなネオンブルーにハイライト
+                        // ② 国全体を鮮やかにシアンブルーに発光
                         d3.select(this).style("fill", "#00aaff");
 
-                        // ③ 空港ピンと名前看板を動的に表示
-                        if (iso2) {
-                            showAirports(iso2);
-                        }
+                        // ③ 文字ラベルの表示状態を更新
+                        refreshLabels();
                     })
                     
                     .on("mouseout", function() {
+                        currentActiveCountry = "";
                         d3.select("#tooltip").style("display", "none");
                         d3.select(this).style("fill", "#1f3147"); // 通常の色に戻す
-                        pinsGroup.selectAll("*").remove(); // マウスが離れたらピンを消去
+                        refreshLabels();
                     });
 
-                // 🔄 地球儀を手動でドラッグして回す処理
+                // 📌 最初からすべての空港ピンを地球儀上に刺しておく
+                initAllPins();
+
+                // 🔄 地球儀を手動でドラッグして回す処理（超低感度チューニング）
                 svg.call(d3.drag().on("drag", function(event) {
                     const rotate = projection.rotate();
                     projection.rotate([
@@ -153,7 +214,7 @@
 
                 // 🖱️ マウスホイールでのズームイン・アウト処理
                 svg.call(d3.zoom()
-                    .scaleExtent([0.5, 5])
+                    .scaleExtent([0.6, 4])
                     .on("zoom", function(event) {
                         projection.scale(280 * event.transform.k);
                         refreshAll();
@@ -165,66 +226,78 @@
         function refreshAll() {
             svg.selectAll(".country").attr("d", path);
             ocean.attr("r", projection.scale());
-            updatePins();
+            updatePinsAndLabels();
         }
 
-        // --- ✈️ 空港ピン・名前テキスト表示関数 ---
-        function showAirports(countryCode) {
-            pinsGroup.selectAll("*").remove();
-
-            const localAirports = airportData.filter(ap => ap.country === countryCode);
-
-            localAirports.forEach(ap => {
+        // --- 📌 空港ピンとラベル（テキスト）の初期配置 ---
+        function initAllPins() {
+            airportData.forEach(ap => {
                 const geoPoint = { "type": "Point", "coordinates": [ap.lon, ap.lat] };
                 
-                // 空港ピン（ネオンレッド）
+                // 🔴 空港ピン（常に表示される小さなドット）
                 pinsGroup.append("circle")
                     .datum(geoPoint)
                     .attr("class", "airport-pin")
-                    .attr("r", 5)
+                    .attr("r", 4.5)
                     .style("fill", "#ff3300")
                     .style("stroke", "#ffffff")
-                    .style("stroke-width", "1.5px");
+                    .style("stroke-width", "1.2px");
 
-                // 空港名テキスト（オレンジ）
+                // 🔤 空港名テキスト（普段は非表示、該当国ホバー時のみ出現）
                 pinsGroup.append("text")
-                    .datum(geoPoint)
+                    .datum({ geo: geoPoint, country: ap.country, text: `✈️ ${ap.name} [${ap.iata}]` })
                     .attr("class", "airport-text")
-                    .text(`✈️ ${ap.name} [${ap.iata}]`)
-                    .attr("dx", 10)
+                    .text(d => d.text)
+                    .attr("dx", 9)
                     .attr("dy", 4)
                     .style("fill", "#ffcc00")
                     .style("font-size", "12px")
                     .style("font-weight", "bold")
-                    .style("text-shadow", "2px 2px 3px #000");
+                    .style("text-shadow", "2px 2px 3px #000")
+                    .style("display", "none"); // 最初は非表示
             });
 
-            updatePins();
+            updatePinsAndLabels();
         }
 
-        // 回転やズームに合わせて、ピンの位置をリアルタイム計算する関数
-        function updatePins() {
+        // 国のホバー状況に応じて、文字ラベルの「出す・消す」を管理する関数
+        function refreshLabels() {
+            pinsGroup.selectAll(".airport-text")
+                .style("display", function(d) {
+                    const gpath = d3.geoPath().projection(projection);
+                    // 地球の表側にあり、かつ「現在ホバーされている国コード」と一致する場合のみ表示
+                    if (gpath(d.geo) && d.country === currentActiveCountry) {
+                        return "inline";
+                    }
+                    return "none";
+                });
+        }
+
+        // 回転やズームに合わせて、全てのピンと文字の位置・裏表の視認性を再計算する関数
+        function updatePinsAndLabels() {
             // ピンの位置修正
             pinsGroup.selectAll(".airport-pin")
                 .attr("cx", d => projection(d.coordinates)[0])
                 .attr("cy", d => projection(d.coordinates)[1])
                 .style("display", d => {
-                    // 地球の裏側（隠れている側）にあるピンは自動で非表示にする
                     const gpath = d3.geoPath().projection(projection);
-                    return gpath(d) ? "inline" : "none";
+                    return gpath(d) ? "inline" : "none"; // 裏側は非表示
                 });
 
             // 空港名テキストの位置修正
             pinsGroup.selectAll(".airport-text")
-                .attr("x", d => projection(d.coordinates)[0])
-                .attr("y", d => projection(d.coordinates)[1])
-                .style("display", d => {
+                .attr("x", d => projection(d.geo.coordinates)[0])
+                .attr("y", d => projection(d.geo.coordinates)[1])
+                .style("display", function(d) {
                     const gpath = d3.geoPath().projection(projection);
-                    return gpath(d) ? "inline" : "none";
+                    if (gpath(d.geo) && d.country === currentActiveCountry) {
+                        return "inline";
+                    }
+                    return "none";
                 });
         }
 
-        // ウィンドウズサイズが変更されたときの追従
+        // ウィンドウズサイズが変更されたときの自動追従
         window.addEventListener("resize", function() {
             const w = window.innerWidth;
             const h = window.innerHeight;
