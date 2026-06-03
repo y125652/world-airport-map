@@ -3,34 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Globe</title>
+    <title>2D World Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background-color: #000;
         }
-        #globeViz {
+        /* 地図を画面いっぱいに表示 */
+        #map {
             width: 100vw;
             height: 100vh;
+            background-color: #0d1117; /* 海の色を暗いグレーに */
         }
     </style>
-    <script src="https://unpkg.com/globe.gl@2.26.0/dist/globe.gl.min.js"></script>
 </head>
 <body>
 
-    <div id="globeViz"></div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // 地球儀を初期化して画面に表示
-        const myGlobe = Globe()(document.getElementById('globeViz'))
-            .backgroundColor('#000000') // 背景色を黒に
-            .baseColor('#111111')       // 地球のベース色を暗いグレーに
-            .showAtmosphere(true)       // 大気圏のエフェクトを有効化
-            .atmosphereColor('#3a86ff'); // 大気圏の色を青に
+        // 地図の初期化（中心を緯度0, 経度0、ズームレベル2に設定）
+        const map = L.map('map', {
+            minZoom: 2,
+            maxZoom: 10,
+            continuousWorld: false,
+            noWrap: false
+        }).setView([20, 0], 2);
 
-        // カメラの初期距離を設定
-        myGlobe.pointOfView({ alt: 2.5 });
+        // シンプルでスタイリッシュなダーク系の地図タイル（背景画像）を読み込み
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd'
+        }).addTo(map);
     </script>
 </body>
 </html>
