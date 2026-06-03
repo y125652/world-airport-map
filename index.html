@@ -11,7 +11,7 @@
     <style>
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden; background-color: #030408; /* Space black */
+            overflow: hidden; background-color: #030408; /* 宇宙空間 */
             font-family: 'Helvetica Neue', Arial, sans-serif;
         }
         #globe-container {
@@ -22,7 +22,7 @@
             outline: none !important;
             -webkit-tap-highlight-color: rgba(0,0,0,0);
         }
-        /* Refined, focused tooltip centered above the globe */
+        /* 画面中央上部の国名吹き出し */
         #tooltip {
             position: absolute; top: 25px; left: 50%;
             transform: translateX(-50%); background: rgba(10, 16, 35, 0.95);
@@ -41,46 +41,54 @@
     </div>
 
     <script>
-        // --- 📊 Major World Airports Data, focused on specific airports ---
+        // --- 📊 全世界の主要空港データ ---
         const airportData = [
-            // Focused airports for Japan
-            { name: "東京国際空港", iata: "HND", country: "JP", lat: 35.549, lon: 139.780 },
+            // 🇯🇵 日本の主要空港
+            { name: "東京国際空港（羽田）", iata: "HND", country: "JP", lat: 35.549, lon: 139.780 },
             { name: "成田国際空港", iata: "NRT", country: "JP", lat: 35.772, lon: 140.393 },
             { name: "関西国際空港", iata: "KIX", country: "JP", lat: 34.432, lon: 135.230 },
             { name: "新千歳空港", iata: "CTS", country: "JP", lat: 42.775, lon: 141.692 },
             { name: "福岡空港", iata: "FUK", country: "JP", lat: 33.585, lon: 130.450 },
             { name: "那覇空港", iata: "OKA", country: "JP", lat: 26.195, lon: 127.646 },
             
-            // Focused airports for other sample countries (for variety)
-            { name: "Incheon Intl", iata: "ICN", country: "KR", lat: 37.460, lon: 126.440 },
-            { name: "Taiwan Taoyuan", iata: "TPE", country: "TW", lat: 25.079, lon: 121.234 },
-            { name: "Beijing Capital", iata: "PEK", country: "CN", lat: 40.079, lon: 116.603 },
-            { name: "John F. Kennedy", iata: "JFK", country: "US", lat: 40.641, lon: -73.778 },
-            { name: "London Heathrow", iata: "LHR", country: "GB", lat: 51.470, lon: -0.454 },
-            { name: "Paris Charles de Gaulle", iata: "CDG", country: "FR", lat: 49.009, lon: 2.547 },
-            { name: "Dubai Intl", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 }
+            // 🌎 世界の主要空港
+            { name: "仁川国際空港", iata: "ICN", country: "KR", lat: 37.460, lon: 126.440 },
+            { name: "台湾桃園国際空港", iata: "TPE", country: "TW", lat: 25.079, lon: 121.234 },
+            { name: "北京首都国際空港", iata: "PEK", country: "CN", lat: 40.079, lon: 116.603 },
+            { name: "ジョン・F・ケネディ国際空港", iata: "JFK", country: "US", lat: 40.641, lon: -73.778 },
+            { name: "ロンドン・ヒースロー空港", iata: "LHR", country: "GB", lat: 51.470, lon: -0.454 },
+            { name: "パリ＝シャルル・ド・ゴール空港", iata: "CDG", country: "FR", lat: 49.009, lon: 2.547 },
+            { name: "ドバイ国際空港", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 }
         ];
 
-        // Country code mappings (ISO 3 to ISO 2)
-        const iso3ToIso2 = { "JPN":"JP","KOR":"KR","TWN":"TW","CHN":"CN","USA":"US","GBR":"GB","FRA":"FR","ARE":"AE" };
+        // 🔎 【最重要修正】地図データの数値IDから2文字の国コード（空港連動用）へ変換する完全なテーブル
+        const idToIso2 = {
+            "392": "JP", // 日本
+            "410": "KR", // 韓国
+            "158": "TW", // 台湾
+            "156": "CN", // 中国
+            "840": "US", // アメリカ
+            "826": "GB", // イギリス
+            "250": "FR", // フランス
+            "784": "AE"  // アラブ首長国連邦
+        };
 
         const width = window.innerWidth;
         const height = window.innerHeight;
-        // 🔄 Rotation sensitivity reduced further for slower, smoother rotation
-        const sensitivity = 0.15; 
+        const sensitivity = 0.15; // 🔄 滑らかで扱いやすいドラッグ回転感度
 
         const svg = d3.select("#globe")
             .attr("width", width)
             .attr("height", height);
 
-        // 3D globe (orthographic projection) setup
+        // 3D地球儀（正射投影法）の設定
         const projection = d3.geoOrthographic()
-            .scale(280) // Initial scale
+            .scale(280)
             .translate([width / 2, height / 2]);
 
         const path = d3.geoPath().projection(projection);
 
-        // 🌊 Solid ocean background circle (deep blue marble color)
+        // 🌊 海の描写（完全に不透明な深海ネイビーで視認性を確保）
         const ocean = svg.append("circle")
             .attr("cx", width / 2)
             .attr("cy", height / 2)
@@ -88,57 +96,54 @@
             .style("fill", "#0a1128")
             .style("stroke", "none");
 
-        const mapGroup = svg.append("g");  // Land layer
-        const pinsGroup = svg.append("g"); // Airports layer
+        const mapGroup = svg.append("g");  // 陸地レイヤー
+        const pinsGroup = svg.append("g"); // 空港レイヤー
 
-        // 🗺️ Use TopoJSON for a clean, non-overlapping country structure
+        // 🗺️ 世界地図（世界標準のTopoJSON）をロード
         d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
             .then(function(world) {
-                // Convert TopoJSON to GeoJSON
                 const countries = topojson.feature(world, world.objects.countries).features;
 
-                // Render landmasses
+                // 陸地の描写
                 mapGroup.selectAll(".country")
                     .data(countries)
                     .enter().append("path")
                     .attr("class", "country")
                     .attr("d", path)
-                    // High-contrast, matte grey land color
+                    // 海と完全に色を切り分けた「ソリッドグレー」
                     .style("fill", "#1f3147")
-                    .style("stroke", "white") // Distinct white borders
+                    .style("stroke", "#2d4460")
                     .style("stroke-width", "1px")
                     
-                    // 🔎 Improved, stable hover detection
+                    // 🔎 マウスホバーイベント
                     .on("mouseover", function(event, d) {
                         const name = d.properties.name || "不明な国";
-                        
-                        // Robust code retrieval
-                        let iso3 = d.id || "";
-                        if (iso3.length !== 3 && d.properties.iso_a3) iso3 = d.properties.iso_a3;
-                        const iso2 = iso3ToIso2[iso3] || "";
+                        const countryId = String(d.id); // 地図データ固有の数値ID
+                        const iso2 = idToIso2[countryId] || ""; // 2文字コードに変換
 
-                        // Corrected: Tooltip now displays 'Country Name (ISO Code)'
+                        // ① 国名を上部に表示
                         d3.select("#tooltip")
-                            .html(`🌍 ${name} (${iso2})`)
+                            .html(`🌍 ${name} ${iso2 ? '(' + iso2 + ')' : ''}`)
                             .style("display", "block");
 
-                        // Vibrant cyan highlight color
+                        // ② 国全体を鮮やかなネオンブルーにハイライト
                         d3.select(this).style("fill", "#00aaff");
 
-                        // Dynamically render airport pins and labels
-                        showAirports(iso2);
+                        // ③ 空港ピンと名前看板を動的に表示
+                        if (iso2) {
+                            showAirports(iso2);
+                        }
                     })
                     
                     .on("mouseout", function() {
                         d3.select("#tooltip").style("display", "none");
-                        d3.select(this).style("fill", "#1f3147"); // Reset land color
-                        pinsGroup.selectAll("*").remove(); // Remove all pins
+                        d3.select(this).style("fill", "#1f3147"); // 通常の色に戻す
+                        pinsGroup.selectAll("*").remove(); // マウスが離れたらピンを消去
                     });
 
-                // 🔄 Rotation interaction with refined, low sensitivity
+                // 🔄 地球儀を手動でドラッグして回す処理
                 svg.call(d3.drag().on("drag", function(event) {
                     const rotate = projection.rotate();
-                    // dx/dy values modified by the reduced sensitivity
                     projection.rotate([
                         rotate[0] + event.dx * sensitivity,
                         rotate[1] - event.dy * sensitivity
@@ -146,34 +151,33 @@
                     refreshAll();
                 }));
 
-                // Smooth wheel zoom interaction
+                // 🖱️ マウスホイールでのズームイン・アウト処理
                 svg.call(d3.zoom()
-                    .scaleExtent([0.5, 5]) // Limit zoom scale
+                    .scaleExtent([0.5, 5])
                     .on("zoom", function(event) {
-                        // Rescale the globe based on zoom
                         projection.scale(280 * event.transform.k);
                         refreshAll();
                     })
                 );
             });
 
-        // Function to refresh the visual state of the globe
+        // 画面全体の再描画関数
         function refreshAll() {
             svg.selectAll(".country").attr("d", path);
             ocean.attr("r", projection.scale());
             updatePins();
         }
 
-        // --- ✈️ Dynamic Airport Pins and Labels Function ---
+        // --- ✈️ 空港ピン・名前テキスト表示関数 ---
         function showAirports(countryCode) {
-            pinsGroup.selectAll("*").remove(); // Clear previous pins
+            pinsGroup.selectAll("*").remove();
 
             const localAirports = airportData.filter(ap => ap.country === countryCode);
 
             localAirports.forEach(ap => {
                 const geoPoint = { "type": "Point", "coordinates": [ap.lon, ap.lat] };
                 
-                // Add airport pin (red circle marker)
+                // 空港ピン（ネオンレッド）
                 pinsGroup.append("circle")
                     .datum(geoPoint)
                     .attr("class", "airport-pin")
@@ -182,35 +186,35 @@
                     .style("stroke", "#ffffff")
                     .style("stroke-width", "1.5px");
 
-                // Corrected: Dynamic text labels show '✈️ Airport Name [IATA]'
+                // 空港名テキスト（オレンジ）
                 pinsGroup.append("text")
                     .datum(geoPoint)
                     .attr("class", "airport-text")
                     .text(`✈️ ${ap.name} [${ap.iata}]`)
                     .attr("dx", 10)
                     .attr("dy", 4)
-                    .style("fill", "#ffcc00") // Warm yellow labels
+                    .style("fill", "#ffcc00")
                     .style("font-size", "12px")
                     .style("font-weight", "bold")
-                    .style("text-shadow", "2px 2px 3px #000"); // Add text shadow for visibility
+                    .style("text-shadow", "2px 2px 3px #000");
             });
 
             updatePins();
         }
 
-        // Function to update the 3D position and visibility of pins
+        // 回転やズームに合わせて、ピンの位置をリアルタイム計算する関数
         function updatePins() {
-            // Pin circles
+            // ピンの位置修正
             pinsGroup.selectAll(".airport-pin")
                 .attr("cx", d => projection(d.coordinates)[0])
                 .attr("cy", d => projection(d.coordinates)[1])
                 .style("display", d => {
-                    // Corrected: Uses proper orthographic visibility logic
+                    // 地球の裏側（隠れている側）にあるピンは自動で非表示にする
                     const gpath = d3.geoPath().projection(projection);
                     return gpath(d) ? "inline" : "none";
                 });
 
-            // Airport text labels
+            // 空港名テキストの位置修正
             pinsGroup.selectAll(".airport-text")
                 .attr("x", d => projection(d.coordinates)[0])
                 .attr("y", d => projection(d.coordinates)[1])
@@ -220,7 +224,7 @@
                 });
         }
 
-        // Standard resize handler
+        // ウィンドウズサイズが変更されたときの追従
         window.addEventListener("resize", function() {
             const w = window.innerWidth;
             const h = window.innerHeight;
