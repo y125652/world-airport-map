@@ -59,7 +59,7 @@
 
         const globeGroup = new THREE.Group();
 
-        // 2. キャンバステクスチャの設定
+        // 2. 高解像度キャンバステクスチャの生成（描画崩れを完全に防ぐ仕組み）
         const canvas = document.createElement('canvas');
         canvas.width = 4096;
         canvas.height = 2048;
@@ -71,19 +71,17 @@
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeGroup.add(globeMesh);
 
-        // 【数式統一①】2D地図キャンバスの展開ロジック
+        // 経緯度を2Dキャンバスの描画座標に変換
         function geoToCanvas(lat, lng) {
             const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
             return { x, y };
         }
 
-        // 【数式統一②】経緯度から3DのXYZ座標に落とし込む正確な配置ロジック
+        // 経緯度から3D空間のXYZ座標へ正確にピンを打つロジック（UVマッピングと完全同期）
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (lng + 180) * (Math.PI / 180);
-
-            // Three.js標準の球体テクスチャ展開規則（UV）に完璧に合致する数式
             const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
             const z = radius * Math.sin(phi) * Math.cos(theta);
@@ -167,6 +165,7 @@
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
+        // 2D平面上での点の内外判定ロジック
         function isPointInPolygon(lat, lng, polygon) {
             let inside = false;
             for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -181,12 +180,12 @@
         let geoJsonData = null;
         let hoveredCountryName = "";
 
-        // 3. 地図描画関数
+        // 3. 地図マスター描画関数（バグ・隙間のない一括レンダリング）
         function drawMap(targetCountryName = "") {
             if (!geoJsonData) return;
 
-            // 海の色
-            ctx.fillStyle = '#071124';
+            // 海の色（ダークネイビー）
+            ctx.fillStyle = '#051026';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             geoJsonData.features.forEach(feature => {
@@ -194,12 +193,13 @@
                 const coordinates = feature.geometry.coordinates;
                 const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
 
+                // 通常時は明るいグレー、ホバー時は鮮やかな青に塗り分け
                 if (countryName === targetCountryName) {
-                    ctx.fillStyle = '#1e90ff';  // ホバー：鮮やかな青
+                    ctx.fillStyle = '#1e90ff';  
                 } else {
-                    ctx.fillStyle = '#dcdcdc';  // 陸地：明るいグレー
+                    ctx.fillStyle = '#dcdcdc';  
                 }
-                ctx.strokeStyle = '#556688';
+                ctx.strokeStyle = '#556688'; // 国境線
                 ctx.lineWidth = 1.5;
 
                 if (type === 'Polygon') {
@@ -223,13 +223,13 @@
             ctx.stroke();
         }
 
-        // 世界の国境データ読み込み
+        // 国境データのロード
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(json => {
                 geoJsonData = json;
                 drawMap();
-                createAirportPins(); // 配置ロジック統一後にピンを刺す
+                createAirportPins(); // 同期完了後に正確な位置へピンを展開
             });
 
         // 4. 空港ピンの配置処理
@@ -249,7 +249,7 @@
         }
 
         scene.add(globeGroup);
-        // 初期角度のズレを解消するためリセット（日本を初期正面に調整）
+        // 初期角度の反転ズレを解消（日本が正確に初期正面を向くように設定）
         globeGroup.rotation.y = -Math.PI / 2; 
 
         // 5. マウス操作・ドラッグ・ズーム・ホバー処理
@@ -271,6 +271,7 @@
             const airportIntersects = raycaster.intersectObjects(pins);
             
             if (airportIntersects.length > 0) {
+                // 空港にホバーした時
                 const data = airportIntersects[0].object.userData;
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
@@ -278,19 +279,17 @@
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
             } else {
+                // 地球儀の表面上の交点を検出し、国を特定
                 const globeIntersects = raycaster.intersectObject(globeMesh);
                 
                 if (globeIntersects.length > 0 && geoJsonData) {
                     const hitPoint = globeIntersects[0].point;
-                    
-                    // 回転グループ内のローカル座標系に引き戻す
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
                     
-                    // 【数式統一③】3DのXYZ空間から正確にLat/Lng（経緯度）を逆引き算出するロジック
+                    // 3D空間のXYZから、テクスチャ展開規則に完全一致するLat/Lng（経緯度）を逆算
                     const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
                     
-                    // テクスチャ配置関数（latLngToVector3）の逆算に完全に一致させたコード
                     let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI) - 180;
                     while (lng > 180) lng -= 360;
                     while (lng < -180) lng += 360;
@@ -317,11 +316,13 @@
                         labelEl.innerHTML = `<strong>${name}</strong> (${iso2})`;
                         document.body.style.cursor = 'default';
 
+                        // 国をまたいだ瞬間のみ、キャンバステクスチャを瞬時に1回再描画
                         if (hoveredCountryName !== name) {
                             hoveredCountryName = name;
                             drawMap(name);
                         }
                     } else {
+                        // 海の上
                         labelEl.style.display = 'none';
                         document.body.style.cursor = 'default';
                         if (hoveredCountryName !== "") {
@@ -330,6 +331,7 @@
                         }
                     }
                 } else {
+                    // 地球の外
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
                     if (hoveredCountryName !== "") {
@@ -346,7 +348,7 @@
                 y: e.clientY - previousMousePosition.y
             };
 
-            // コロコロ回転の適用
+            // コロコロ転がす回転マッピング
             globeGroup.rotation.y += deltaMove.x * 0.005;
             globeGroup.rotation.x += deltaMove.y * 0.005;
 
@@ -363,6 +365,7 @@
             camera.position.z = currentZoom;
         }, { passive: true });
 
+        // 6. アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
