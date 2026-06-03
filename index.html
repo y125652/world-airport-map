@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D世界空港地球儀マップ（完全修正版）</title>
+    <title>3D世界空港地球儀マップ（修正完成版）</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
     <style>
@@ -20,13 +20,16 @@
             font-size: 18px; font-weight: bold; border: 1px solid #00f0ff; pointer-events: none; 
             z-index: 1000; display: none; box-shadow: 0 4px 25px rgba(0,240,255,0.4); text-align: center;
         }
-        /* 国境線用のスタイル（地表の上に確実に重ねる） */
+        /* 国境線用のスタイル */
         .boundary {
             fill: none;
             stroke: #ffffff;
-            stroke-width: 1px;
+            stroke-width: 0.8px;
             stroke-linejoin: round;
-            pointer-events: none; /* マウスホバーを邪魔しない */
+            pointer-events: none;
+        }
+        .country {
+            cursor: pointer;
         }
     </style>
 </head>
@@ -36,7 +39,7 @@
     <div id="globe-container"><svg id="globe"></svg></div>
 
     <script>
-        // --- 📊 全世界ハブ＆主要国際空港データベース ---
+        // --- 全世界ハブ＆主要国際空港データベース ---
         const airportData = [
             // 日本 (JP)
             { name: "東京国際空港（羽田）", iata: "HND", country: "JP", lat: 35.549, lon: 139.780 },
@@ -71,7 +74,7 @@
             { name: "成都天府国際空港", iata: "TFU", country: "CN", lat: 30.312, lon: 104.442 },
             { name: "深圳宝安国際空港", iata: "SZX", country: "CN", lat: 22.639, lon: 113.811 },
             { name: "西安咸陽国際空港", iata: "XIY", country: "CN", lat: 34.447, lon: 108.752 },
-            // 世界各国の主要ハブ（ミニ国家、島国も完全対応）
+            // 世界各国の主要ハブ
             { name: "シンガポール・チャンギ", iata: "SIN", country: "SG", lat: 1.350, lon: 103.994 },
             { name: "マニラ国際空港", iata: "MNL", country: "PH", lat: 14.508, lon: 121.011 },
             { name: "仁川国際空港", iata: "ICN", country: "KR", lat: 37.460, lon: 126.440 },
@@ -124,7 +127,7 @@
             { name: "バチカンヘリポート", iata: "VAT", country: "VA", lat: 41.902, lon: 12.447 }
         ];
 
-        // --- 🗺️ 国連規格コードに基づく、世界全地域TC区分定義表 ---
+        // --- 世界全地域TC区分定義表 ---
         const idToCountryConfig = {
             // ■ TC1: 南北アメリカ (アメジストパープル)
             "028":{iso2:"AG",tc:"TC1"}, "032":{iso2:"AR",tc:"TC1"}, "044":{iso2:"BS",tc:"TC1"}, "052":{iso2:"BB",tc:"TC1"}, "084":{iso2:"BZ",tc:"TC1"}, "068":{iso2:"BO",tc:"TC1"}, "076":{iso2:"BR",tc:"TC1"}, "124":{iso2:"CA",tc:"TC1"}, "152":{iso2:"CL",tc:"TC1"}, "170":{iso2:"CO",tc:"TC1"}, "188":{iso2:"CR",tc:"TC1"}, "192":{iso2:"CU",tc:"TC1"}, "212":{iso2:"DM",tc:"TC1"}, "214":{iso2:"DO",tc:"TC1"}, "218":{iso2:"EC",tc:"TC1"}, "222":{iso2:"SV",tc:"TC1"}, "304":{iso2:"GL",tc:"TC1"}, "308":{iso2:"GD",tc:"TC1"}, "320":{iso2:"GT",tc:"TC1"}, "328":{iso2:"GY",tc:"TC1"}, "332":{iso2:"HT",tc:"TC1"}, "340":{iso2:"HN",tc:"TC1"}, "388":{iso2:"JM",tc:"TC1"}, "484":{iso2:"MX",tc:"TC1"}, "558":{iso2:"NI",tc:"TC1"}, "591":{iso2:"PA",tc:"TC1"}, "600":{iso2:"PY",tc:"TC1"}, "604":{iso2:"PE",tc:"TC1"}, "630":{iso2:"PR",tc:"TC1"}, "659":{iso2:"KN",tc:"TC1"}, "662":{iso2:"LC",tc:"TC1"}, "670":{iso2:"VC",tc:"TC1"}, "740":{iso2:"SR",tc:"TC1"}, "780":{iso2:"TT",tc:"TC1"}, "858":{iso2:"UY",tc:"TC1"}, "862":{iso2:"VE",tc:"TC1"}, "840":{iso2:"US",tc:"TC1"}, "254":{iso2:"GF",tc:"TC1"}, "238":{iso2:"FK",tc:"TC1"}, "312":{iso2:"GP",tc:"TC1"}, "663":{iso2:"MF",tc:"TC1"}, "534":{iso2:"SX",tc:"TC1"}, "531":{iso2:"CW",tc:"TC1"}, "535":{iso2:"BQ",tc:"TC1"}, "01c":{iso2:"AW",tc:"TC1"}, "ca1":{iso2:"BL",tc:"TC1"}, "658":{iso2:"AI",tc:"TC1"}, "ca2":{iso2:"TC",tc:"TC1"}, "ca3":{iso2:"VG",tc:"TC1"}, "ca4":{iso2:"VI",tc:"TC1"}, "ca5":{iso2:"BM",tc:"TC1"}, "ca6":{iso2:"KY",tc:"TC1"},
@@ -133,14 +136,16 @@
             "004":{iso2:"AF",tc:"TC3"}, "050":{iso2:"BD",tc:"TC3"}, "064":{iso2:"BT",tc:"TC3"}, "096":{iso2:"BN",tc:"TC3"}, "116":{iso2:"KH",tc:"TC3"}, "156":{iso2:"CN",tc:"TC3"}, "242":{iso2:"FJ",tc:"TC3"}, "344":{iso2:"HK",tc:"TC3"}, "356":{iso2:"IN",tc:"TC3"}, "360":{iso2:"ID",tc:"TC3"}, "392":{iso2:"JP",tc:"TC3"}, "417":{iso2:"KG",tc:"TC3"}, "418":{iso2:"LA",tc:"TC3"}, "446":{iso2:"MO",tc:"TC3"}, "458":{iso2:"MY",tc:"TC3"}, "462":{iso2:"MV",tc:"TC3"}, "496":{iso2:"MN",tc:"TC3"}, "104":{iso2:"MM",tc:"TC3"}, "524":{iso2:"NP",tc:"TC3"}, "036":{iso2:"AU",tc:"TC3"}, "554":{iso2:"NZ",tc:"TC3"}, "586":{iso2:"PK",tc:"TC3"}, "598":{iso2:"PG",tc:"TC3"}, "608":{iso2:"PH",tc:"TC3"}, "702":{iso2:"SG",tc:"TC3"}, "144":{iso2:"LK",tc:"TC3"}, "158":{iso2:"TW",tc:"TC3"}, "764":{iso2:"TH",tc:"TC3"}, "626":{iso2:"TL",tc:"TC3"}, "704":{iso2:"VN",tc:"TC3"}, "090":{iso2:"SB",tc:"TC3"}, "540":{iso2:"NC",tc:"TC3"}, "776":{iso2:"TO",tc:"TC3"}, "258":{iso2:"PF",tc:"TC3"}, "316":{iso2:"GU",tc:"TC3"}, "882":{iso2:"WS",tc:"TC3"}, "548":{iso2:"VU",tc:"TC3"}, "410":{iso2:"KR",tc:"TC3"}, "296":{iso2:"KI",tc:"TC3"}, "584":{iso2:"MH",tc:"TC3"}, "583":{iso2:"FM",tc:"TC3"}, "520":{iso2:"NR",tc:"TC3"}, "624":{iso2:"GZ",tc:"TC3"}, "as1":{iso2:"AS",tc:"TC3"}, "as2":{iso2:"CK",tc:"TC3"}, "as3":{iso2:"NU",tc:"TC3"}, "as4":{iso2:"TK",tc:"TC3"}, "as5":{iso2:"WF",tc:"TC3"}, "as6":{iso2:"TV",tc:"TC3"}, "as7":{iso2:"MP",tc:"TC3"}, "as8":{iso2:"UM",tc:"TC3"}, "as9":{iso2:"PW",tc:"TC3"},
 
             // ■ TC2: ヨーロッパ・中東・アフリカ (ルビーワイン)
-            "008":{iso2:"AL",tc:"TC2"}, "012":{iso2:"DZ",tc:"TC2"}, "024":{iso2:"AO",tc:"TC2"}, "040":{iso2:"AT",tc:"TC2"}, "031":{iso2:"AZ",tc:"TC2"}, "048":{iso2:"BH",tc:"TC2"}, "056":{iso2:"BE",tc:"TC2"}, "204":{iso2:"BJ",tc:"TC2"}, "072":{iso2:"BW",tc:"TC2"}, "100":{iso2:"BG",tc:"TC2"}, "854":{iso2:"BF",tc:"TC2"}, "108":{iso2:"BI",tc:"TC2"}, "120":{iso2:"CM",tc:"TC2"}, "132":{iso2:"CV",tc:"TC2"}, "140":{iso2:"CF",tc:"TC2"}, "148":{iso2:"TD",tc:"TC2"}, "178":{iso2:"CG",tc:"TC2"}, "180":{iso2:"CD",tc:"TC2"}, "384":{iso2:"CI",tc:"TC2"}, "196":{iso2:"CY",tc:"TC2"}, "203":{iso2:"CZ",tc:"TC2"}, "208":{iso2:"DK",tc:"TC2"}, "262":{iso2:"DJ",tc:"TC2"}, "818":{iso2:"EG",tc:"TC2"}, "226":{iso2:"GQ",tc:"TC2"}, "232":{iso2:"ER",tc:"TC2"}, "233":{iso2:"EE",tc:"TC2"}, "231":{iso2:"ET",tc:"TC2"}, "246":{iso2:"FI",tc:"TC2"}, "250":{iso2:"FR",tc:"TC2"}, "266":{iso2:"GA",tc:"TC2"}, "270":{iso2:"GM",tc:"TC2"}, "268":{iso2:"GE",tc:"TC2"}, "276":{iso2:"DE",tc:"TC2"}, "288":{iso2:"GH",tc:"TC2"}, "300":{iso2:"GR",tc:"TC2"}, "624":{iso2:"GW",tc:"TC2"}, "348":{iso2:"HU",tc:"TC2"}, "352":{iso2:"IS",tc:"TC2"}, "364":{iso2:"IR",tc:"TC2"}, "368":{iso2:"IQ",tc:"TC2"}, "372":{iso2:"IE",tc:"TC2"}, "376":{iso2:"IL",tc:"TC2"}, "380":{iso2:"IT",tc:"TC2"}, "400":{iso2:"JO",tc:"TC2"}, "398":{iso2:"KZ",tc:"TC2"}, "404":{iso2:"KE",tc:"TC2"}, "414":{iso2:"KW",tc:"TC2"}, "422":{iso2:"LB",tc:"TC2"}, "426":{iso2:"LS",tc:"TC2"}, "430":{iso2:"LR",tc:"TC2"}, "434":{iso2:"LY",tc:"TC2"}, "442":{iso2:"LU",tc:"TC2"}, "450":{iso2:"MG",tc:"TC2"}, "478":{iso2:"MR",tc:"TC2"}, "480":{iso2:"MU",tc:"TC2"}, "504":{iso2:"MA",tc:"TC2"}, "508":{iso2:"MZ",tc:"TC2"}, "516":{iso2:"NA",tc:"TC2"}, "562":{iso2:"NE",tc:"TC2"}, "566":{iso2:"NG",tc:"TC2"}, "578":{iso2:"NO",tc:"TC2"}, "512":{iso2:"OM",tc:"TC2"}, "616":{iso2:"PL",tc:"TC2"}, "620":{iso2:"PT",tc:"TC2"}, "634":{iso2:"QA",tc:"TC2"}, "642":{iso2:"RO",tc:"TC2"}, "643":{iso2:"RU",tc:"TC2"}, "646":{iso2:"RW",tc:"TC2"}, "682":{iso2:"SA",tc:"TC2"}, "686":{iso2:"SN",tc:"TC2"}, "688":{iso2:"RS",tc:"TC2"}, "690":{iso2:"SC",tc:"TC2"}, "694":{iso2:"SL",tc:"TC2"}, "703":{iso2:"SK",tc:"TC2"}, "705":{iso2:"SI",tc:"TC2"}, "706":{iso2:"SO",tc:"TC2"}, "710":{iso2:"ZA",tc:"TC2"}, "728":{iso2:"SS",tc:"TC2"}, "736":{iso2:"SD",tc:"TC2"}, "748":{iso2:"SZ",tc:"TC2"}, "752":{iso2:"SE",tc:"TC2"}, "756":{iso2:"CH",tc:"TC2"}, "762":{iso2:"TJ",tc:"TC2"}, "834":{iso2:"TZ",tc:"TC2"}, "788":{iso2:"TN",tc:"TC2"}, "792":{iso2:"TR",tc:"TC2"}, "795":{iso2:"TM",tc:"TC2"}, "800":{iso2:"UG",tc:"TC2"}, "804":{iso2:"UA",tc:"TC2"}, "860":{iso2:"UZ",tc:"TC2"}, "887":{iso2:"YE",tc:"TC2"}, "894":{iso2:"ZM",tc:"TC2"}, "716":{iso2:"ZW",tc:"TC2"}, "174":{iso2:"KM",tc:"TC2"}, "470":{iso2:"MT",tc:"TC2"}, "112":{iso2:"BY",tc:"TC2"}, "191":{iso2:"HR",tc:"TC2"}, "499":{iso2:"ME",tc:"TC2"}, "500":{iso2:"MS",tc:"TC2"}, "132":{iso2:"CV",tc:"TC2"}, "678":{iso2:"ST",tc:"TC2"}, "070":{iso2:"BA",tc:"TC2"}, "807":{iso2:"MK",tc:"TC2"}, "466":{iso2:"ML",tc:"TC2"}, "248":{iso2:"AX",tc:"TC2"}, "438":{iso2:"LI",tc:"TC2"}, "020":{iso2:"AD",tc:"TC2"}, "680":{iso2:"RE",tc:"TC2"}, "234":{iso2:"FO",tc:"TC2"}, "336":{iso2:"VA",tc:"TC2"}, "492":{iso2:"MC",tc:"TC2"}, "729":{iso2:"SD",tc:"TC2"}, "000":{iso2:"AQ",tc:"TC2"}
+            "008":{iso2:"AL",tc:"TC2"}, "012":{iso2:"DZ",tc:"TC2"}, "024":{iso2:"AO",tc:"TC2"}, "040":{iso2:"AT",tc:"TC2"}, "031":{iso2:"AZ",tc:"TC2"}, "048":{iso2:"BH",tc:"TC2"}, "056":{iso2:"BE",tc:"TC2"}, "204":{iso2:"BJ",tc:"TC2"}, "072":{iso2:"BW",tc:"TC2"}, "100":{iso2:"BG",tc:"TC2"}, "854":{iso2:"BF",tc:"TC2"}, "108":{iso2:"BI",tc:"TC2"}, "120":{iso2:"CM",tc:"TC2"}, "132":{iso2:"CV",tc:"TC2"}, "140":{iso2:"CF",tc:"TC2"}, "148":{iso2:"TD",tc:"TC2"}, "178":{iso2:"CG",tc:"TC2"}, "180":{iso2:"CD",tc:"TC2"}, "384":{iso2:"CI",tc:"TC2"}, "196":{iso2:"CY",tc:"TC2"}, "203":{iso2:"CZ",tc:"TC2"}, "208":{iso2:"DK",tc:"TC2"}, "262":{iso2:"DJ",tc:"TC2"}, "818":{iso2:"EG",tc:"TC2"}, "226":{iso2:"GQ",tc:"TC2"}, "232":{iso2:"ER",tc:"TC2"}, "233":{iso2:"EE",tc:"TC2"}, "231":{iso2:"ET",tc:"TC2"}, "246":{iso2:"FI",tc:"TC2"}, "250":{iso2:"FR",tc:"TC2"}, "266":{iso2:"GA",tc:"TC2"}, "270":{iso2:"GM",tc:"TC2"}, "268":{iso2:"GE",tc:"TC2"}, "276":{iso2:"DE",tc:"TC2"}, "288":{iso2:"GH",tc:"TC2"}, "300":{iso2:"GR",tc:"TC2"}, "624":{iso2:"GW",tc:"TC2"}, "348":{iso2:"HU",tc:"TC2"}, "352":{iso2:"IS",tc:"TC2"}, "364":{iso2:"IR",tc:"TC2"}, "368":{iso2:"IQ",tc:"TC2"}, "372":{iso2:"IE",tc:"TC2"}, "376":{iso2:"IL",tc:"TC2"}, "380":{iso2:"IT",tc:"TC2"}, "400":{iso2:"JO",tc:"TC2"}, "398":{iso2:"KZ",tc:"TC2"}, "404":{iso2:"KE",tc:"TC2"}, "414":{iso2:"KW",tc:"TC2"}, "422":{iso2:"LB",tc:"TC2"}, "426":{iso2:"LS",tc:"TC2"}, "430":{iso2:"LR",tc:"TC2"}, "434":{iso2:"LY",tc:"TC2"}, "442":{iso2:"LU",tc:"TC2"}, "450":{iso2:"MG",tc:"TC2"}, "478":{iso2:"MR",tc:"TC2"}, "480":{iso2:"MU",tc:"TC2"}, "504":{iso2:"MA",tc:"TC2"}, "508":{iso2:"MZ",tc:"TC2"}, "516":{iso2:"NA",tc:"TC2"}, "562":{iso2:"NE",tc:"TC2"}, "566":{iso2:"NG",tc:"TC2"}, "578":{iso2:"NO",tc:"TC2"}, "512":{iso2:"OM",tc:"TC2"}, "616":{iso2:"PL",tc:"TC2"}, "620":{iso2:"PT",tc:"TC2"}, "634":{iso2:"QA",tc:"TC2"}, "642":{iso2:"RO",tc:"TC2"}, "643":{iso2:"RU",tc:"TC2"}, "646":{iso2:"RW",tc:"TC2"}, "682":{iso2:"SA",tc:"TC2"}, "686":{iso2:"SN",tc:"TC2"}, "688":{iso2:"RS",tc:"TC2"}, "690":{iso2:"SC",tc:"TC2"}, "694":{iso2:"SL",tc:"TC2"}, "703":{iso2:"SK",tc:"TC2"}, "705":{iso2:"SI",tc:"TC2"}, "706":{iso2:"SO",tc:"TC2"}, "710":{iso2:"ZA",tc:"TC2"}, "728":{iso2:"SS",tc:"TC2"}, "736":{iso2:"SD",tc:"TC2"}, "748":{iso2:"SZ",tc:"TC2"}, "752":{iso2:"SE",tc:"TC2"}, "756":{iso2:"CH",tc:"TC2"}, "762":{iso2:"TJ",tc:"TC2"}, "834":{iso2:"TZ",tc:"TC2"}, "788":{iso2:"TN",tc:"TC2"}, "792":{iso2:"TR",tc:"TC2"}, "795":{iso2:"TM",tc:"TC2"}, "800":{iso2:"UG",tc:"TC2"}, "804":{iso2:"UA",tc:"TC2"}, "860":{iso2:"UZ",tc:"TC2"}, "887":{iso2:"YE",tc:"TC2"}, "894":{iso2:"ZM",tc:"TC2"}, "716":{iso2:"ZW",tc:"TC2"}, "174":{iso2:"KM",tc:"TC2"}, "470":{iso2:"MT",tc:"TC2"}, "112":{iso2:"BY",tc:"TC2"}, "191":{iso2:"HR",tc:"TC2"}, "499":{iso2:"ME",tc:"TC2"}, "500":{iso2:"MS",tc:"TC2"}, "678":{iso2:"ST",tc:"TC2"}, "070":{iso2:"BA",tc:"TC2"}, "807":{iso2:"MK",tc:"TC2"}, "466":{iso2:"ML",tc:"TC2"}, "248":{iso2:"AX",tc:"TC2"}, "438":{iso2:"LI",tc:"TC2"}, "020":{iso2:"AD",tc:"TC2"}, "680":{iso2:"RE",tc:"TC2"}, "234":{fo:"FO",tc:"TC2"}, "336":{iso2:"VA",tc:"TC2"}, "492":{iso2:"MC",tc:"TC2"}, "729":{iso2:"SD",tc:"TC2"}, "000":{iso2:"AQ",tc:"TC2"}
         };
 
         const tcColors = { "TC1": "#5c3d75", "TC2": "#8338ec", "TC3": "#2d6a4f", "unknown": "#4a5768" };
-        const width = window.innerWidth, height = window.innerHeight, sensitivity = 0.11; 
+        const width = window.innerWidth, height = window.innerHeight, sensitivity = 0.25; 
 
         const svg = d3.select("#globe").attr("width", width).attr("height", height);
-        const projection = d3.geoOrthographic().scale(280).translate([width / 2, height / 2]);
+        
+        // 初期状態の視点を日本（経度140, 緯度35）付近に向ける
+        const projection = d3.geoOrthographic().scale(280).translate([width / 2, height / 2]).rotate([-140, -35]);
         const path = d3.geoPath().projection(projection);
 
         // 🌊 海
@@ -148,10 +153,10 @@
             .attr("cx", width / 2).attr("cy", height / 2).attr("r", projection.scale())
             .style("fill", "#111e38").style("stroke", "none");
 
-        // 各要素のレイヤー順序を厳格化（地表 ➔ 国境メッシュ ➔ 空港ピン）
+        // 各要素のレイヤー
         const mapGroup = svg.append("g");       // ①地表レイヤー
-        const boundaryGroup = svg.append("g");  // ②国境線独立レイヤー（ここが最重要！）
-        const pinsGroup = svg.append("g");      // ③空港ピンレイヤー
+        const boundaryGroup = svg.append("g");  // ②国境線レイヤー
+        const pinsGroup = svg.append("g");      // ③空港ピン・ラベルレイヤー
 
         let currentActiveCountry = ""; 
 
@@ -167,7 +172,7 @@
                     const config = idToCountryConfig[countryId];
                     return config ? tcColors[config.tc] : tcColors["unknown"];
                 })
-                .style("stroke", "none") // 面同士のバッティングを防ぐため個別の枠線は引かない
+                .style("stroke", "none")
                 .on("mouseover", function(event, d) {
                     const countryId = String(d.id).padStart(3, '0');
                     const config = idToCountryConfig[countryId];
@@ -190,12 +195,13 @@
                     refreshLabels();
                 });
 
-            // 🛑 【世界国境線の完全描画】すべての境界を一括で「白い網（Mesh）」として地表の真上に重ねる
+            // ② 国境線の描画
             boundaryGroup.append("path")
-                .datum(topojson.mesh(world, world.objects.countries, (a, b) => a !== b)) // 国と国の境界線のみを抽出
+                .datum(topojson.mesh(world, world.objects.countries, (a, b) => a !== b))
                 .attr("class", "boundary")
                 .attr("d", path);
 
+            // ③ 空港ピンの初期設定
             initAllPins();
 
             // ドラッグ回転
@@ -214,7 +220,7 @@
 
         function refreshAll() {
             svg.selectAll(".country").attr("d", path);
-            svg.select(".boundary").attr("d", path); // 🔄 回転時・ズーム時に国境網（Mesh）も完全に追従再計算
+            svg.select(".boundary").attr("d", path);
             ocean.attr("r", projection.scale());
             updatePinsAndLabels();
         }
@@ -222,57 +228,92 @@
         function initAllPins() {
             airportData.forEach(ap => {
                 const geoPoint = { "type": "Point", "coordinates": [ap.lon, ap.lat] };
+                
+                // ピンの追加
                 pinsGroup.append("circle")
-                    .datum(geoPoint).attr("class", "airport-pin").attr("r", 4.2)
+                    .datum({ geo: geoPoint, country: ap.country })
+                    .attr("class", "airport-pin")
+                    .attr("r", 4.2)
                     .style("fill", "#ff3300").style("stroke", "#ffffff").style("stroke-width", "1.2px");
 
+                // ラベルの追加
                 pinsGroup.append("text")
                     .datum({ geo: geoPoint, country: ap.country, text: `✈️ ${ap.name} [${ap.iata}]` })
-                    .attr("class", "airport-text").text(d => d.text)
-                    .attr("dx", 10).attr("dy", 4)
-                    .style("fill", "#ffcc00").style("font-size", "16.5px").style("font-weight", "bold")
-                    .style("text-shadow", "2px 2px 4px #000, -2px -2px 4px #000").style("display", "none"); 
+                    .attr("class", "airport-text")
+                    .text(d => d.text)
+                    .attr("dx", 10)
+                    .style("fill", "#ffcc00").style("font-size", "14px").style("font-weight", "bold")
+                    .style("text-shadow", "2px 2px 3px #000, -2px -2px 3px #000")
+                    .style("display", "none"); 
             });
             updatePinsAndLabels();
         }
 
+        // ラベルの衝突判定と表示制御
         function refreshLabels() {
             const visibleLabels = [];
+
             pinsGroup.selectAll(".airport-text")
                 .style("display", function(d) {
-                    const gpath = d3.geoPath().projection(projection);
-                    return (gpath(d.geo) && d.country === currentActiveCountry) ? "inline" : "none";
-                })
-                .each(function(d) {
-                    const gpath = d3.geoPath().projection(projection);
-                    if (gpath(d.geo) && d.country === currentActiveCountry) {
-                        visibleLabels.push({ element: d3.select(this), x: projection(d.geo.coordinates)[0], y: projection(d.geo.coordinates)[1] });
+                    // 球体の裏側に隠れているかチェック
+                    const visible = d3.geoInvertCircle(projection.rotate(), 90)(d.geo.coordinates);
+                    if (visible && d.country === currentActiveCountry) {
+                        const coords = projection(d.geo.coordinates);
+                        visibleLabels.push({
+                            element: d3.select(this),
+                            x: coords[0],
+                            baseY: coords[1], // 本来の基準位置を保持
+                            currentY: coords[1]
+                        });
+                        return "inline";
                     }
+                    return "none";
                 });
 
+            // 空港名が重ならないように調整するロジック（Y軸の調整）
             if (visibleLabels.length > 1) {
-                visibleLabels.sort((a, b) => a.x - b.x);
+                // Y座標ベースでソート
+                visibleLabels.sort((a, b) => a.baseY - b.baseY);
+                
                 for (let i = 0; i < visibleLabels.length; i++) {
                     for (let j = i + 1; j < visibleLabels.length; j++) {
-                        if (Math.abs(visibleLabels[i].x - visibleLabels[j].x) < 140 && Math.abs(visibleLabels[i].y - visibleLabels[j].y) < 22) {
-                            visibleLabels[j].y = visibleLabels[i].y + 22;
-                            visibleLabels[j].element.attr("y", visibleLabels[j].y).attr("dy", 0);
+                        // X軸とY軸が一定距離以内に接近している場合
+                        if (Math.abs(visibleLabels[i].x - visibleLabels[j].x) < 160 && 
+                            Math.abs(visibleLabels[i].currentY - visibleLabels[j].currentY) < 20) {
+                            // 下にあるラベルをさらに押し下げる
+                            visibleLabels[j].currentY = visibleLabels[i].currentY + 20;
                         }
                     }
                 }
+
+                // 補正した座標を適用
+                visibleLabels.forEach(d => {
+                    d.element.attr("x", d.x).attr("y", d.currentY);
+                });
             }
         }
 
         function updatePinsAndLabels() {
+            // ピンの位置更新とクリッピング（裏面の隠蔽）
             pinsGroup.selectAll(".airport-pin")
-                .attr("cx", d => projection(d.coordinates)[0]).attr("cy", d => projection(d.coordinates)[1])
-                .style("display", d => d3.geoPath().projection(projection)(d) ? "inline" : "none");
+                .each(function(d) {
+                    const visible = d3.geoInvertCircle(projection.rotate(), 90)(d.geo.coordinates);
+                    if (visible) {
+                        const coords = projection(d.geo.coordinates);
+                        d3.select(this).attr("cx", coords[0]).attr("cy", coords[1]).style("display", "inline");
+                    } else {
+                        d3.select(this).style("display", "none");
+                    }
+                });
 
+            // テキストの位置更新
             pinsGroup.selectAll(".airport-text")
-                .attr("x", d => projection(d.geo.coordinates)[0]).attr("y", d => projection(d.geo.coordinates)[1]).attr("dy", 4)
-                .style("display", function(d) { return (d3.geoPath().projection(projection)(d.geo) && d.country === currentActiveCountry) ? "inline" : "none"; });
+                .each(function(d) {
+                    const coords = projection(d.geo.coordinates);
+                    d3.select(this).attr("x", coords[0]).attr("y", coords[1]);
+                });
                 
-            if (currentActiveCountry) refreshLabels();
+            refreshLabels();
         }
 
         window.addEventListener("resize", function() {
