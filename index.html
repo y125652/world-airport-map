@@ -184,7 +184,7 @@
                 });
             });
 
-        // earcutライブラリを使用して複雑な多角形を完全に塗りつぶす新アルゴリズム
+        // 【修正部】earcutのインデックス計算バグを修正した、多角形塗りつぶしロジック
         function createCountrySector(polygonCoords, lineMat, meshMat, name, iso2) {
             // 外郭線
             const outerCoords = polygonCoords[0];
@@ -205,13 +205,14 @@
             globeGroup.add(line);
 
             // 穴（内包する湖など）がある場合のインデックス処理
-            let currentIndex = outerCoords.length;
+            // earcutは経緯度のペア（要素2個分）を1つの頂点とする「頂点インデックス」を要求するため計算方法を変更
+            let vertexCount = outerCoords.length;
             for (let i = 1; i < polygonCoords.length; i++) {
-                holeIndices.push(currentIndex);
+                holeIndices.push(vertexCount);
                 polygonCoords[i].forEach(coord => {
                     flatCoords.push(coord[0], coord[1]);
                 });
-                currentIndex += polygonCoords[i].length;
+                vertexCount += polygonCoords[i].length;
             }
 
             try {
