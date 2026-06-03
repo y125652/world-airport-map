@@ -15,7 +15,6 @@
             width: 100vw;
             height: 100vh;
         }
-        /* UIレイヤー */
         #ui-container {
             position: absolute;
             top: 20px;
@@ -26,13 +25,13 @@
             padding: 15px;
             border-radius: 8px;
             border: 1px solid #333;
+            z-index: 20;
         }
         h1 { margin: 0 0 10px 0; font-size: 18px; }
         .legend { display: flex; flex-direction: column; gap: 5px; font-size: 12px; }
         .legend-item { display: flex; align-items: center; gap: 8px; }
         .color-box { width: 12px; height: 12px; border-radius: 2px; }
 
-        /* 空港ピンのスタイル */
         .airport-pin {
             width: 8px;
             height: 8px;
@@ -48,7 +47,6 @@
             transform: translate(-50%, -50%) scale(1.5);
         }
 
-        /* ポップアップ（ツールチップ） */
         .airport-label {
             position: absolute;
             background: rgba(0, 0, 0, 0.85);
@@ -68,8 +66,14 @@
         }
     </style>
 
-    <script src="https://unpkg.com/three"></script>
-    <script src="https://unpkg.com/three-globe"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three-globe": "https://unpkg.com/three-globe@2.31.1/dist/three-globe.module.esm.js"
+            }
+        }
+    </script>
 </head>
 <body>
 
@@ -84,20 +88,21 @@
 
     <div id="globeViz"></div>
 
-    <script>
+    <script type="module">
+        import * as THREE from 'three';
+        import ThreeGlobe from 'three-globe';
+
         // --- 1. サンプルデータ定義 ---
-        // TCエリア判定を含めた国データ（簡易版GeoJSON構造）
         const countriesData = {
             type: "FeatureCollection",
             features: [
-                { type: "Feature", properties: { NAME: "Japan", ISO_A2: "JP", TC: "TC3" }, geometry: { type: "Polygon", coordinates: [[[140, 40], [145, 40], [145, 35], [140, 35], [140, 40]]] } }, // 簡易的な四角形
+                { type: "Feature", properties: { NAME: "Japan", ISO_A2: "JP", TC: "TC3" }, geometry: { type: "Polygon", coordinates: [[[140, 40], [145, 40], [145, 35], [140, 35], [140, 40]]] } },
                 { type: "Feature", properties: { NAME: "United States", ISO_A2: "US", TC: "TC1" }, geometry: { type: "Polygon", coordinates: [[[-120, 45], [-80, 45], [-80, 35], [-120, 35], [-120, 45]]] } },
                 { type: "Feature", properties: { NAME: "United Kingdom", ISO_A2: "GB", TC: "TC2" }, geometry: { type: "Polygon", coordinates: [[[-5, 55], [2, 55], [2, 50], [-5, 50], [-5, 55]]] } },
                 { type: "Feature", properties: { NAME: "Singapore", ISO_A2: "SG", TC: "TC3" }, geometry: { type: "Polygon", coordinates: [[[103, 1.4], [104, 1.4], [104, 1.2], [103, 1.2], [103, 1.4]]] } }
             ]
         };
 
-        // 空港データ (緯度, 経度, 空港名, 3レター)
         const airports = [
             { name: "Haneda Airport", code: "HND", lat: 35.5494, lng: 139.7798 },
             { name: "Narita Airport", code: "NRT", lat: 35.7720, lng: 140.3929 },
@@ -107,36 +112,30 @@
             { name: "Singapore Changi", code: "SIN", lat: 1.3502, lng: 103.9893 }
         ];
 
-        // TCエリアごとの色分け設定
         const tcColors = {
-            'TC1': '#3a86ff', // 青
-            'TC2': '#ff006e', // 赤ピンク
-            'TC3': '#8338ec'  // 紫
+            'TC1': '#3a86ff',
+            'TC2': '#ff006e',
+            'TC3': '#8338ec'
         };
 
         // --- 2. 地球儀の初期化 ---
         const Globe = new ThreeGlobe()
-            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg') // 地球の表面テクスチャ
-            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png') // 凹凸
-            
-            // 国境線と塗りつぶしの設定
+            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
+            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
             .polygonsData(countriesData.features)
             .polygonCapColor(d => tcColors[d.properties.TC] || '#aaaaaa')
             .polygonSideColor(() => 'rgba(255, 255, 255, 0.05)')
-            .polygonStrokeColor(() => '#ffffff') // 国境線
-            .polygonLabel(d => `<b>${d.properties.NAME} (${d.properties.ISO_A2})</b>`); // ホバー時の国名表示
+            .polygonStrokeColor(() => '#ffffff')
+            .polygonLabel(d => `<b>${d.properties.NAME} (${d.properties.ISO_A2})</b>`);
 
-        // --- 3. 空港ピン（HTML要素）の追加 ---
-        // ThreeGlobeの「htmlElements」機能を使って、3D空間上の座標にHTMLのピンを配置します
+        // --- 3. 空港ピンの追加 ---
         Globe.htmlElementsData(airports)
             .htmlElement(d => {
                 const container = document.createElement('div');
                 
-                // ピン要素
                 const pin = document.createElement('div');
                 pin.className = 'airport-pin';
                 
-                // ラベル要素（ホバー時に表示）
                 const label = document.createElement('div');
                 label.className = 'airport-label';
                 label.innerHTML = `<strong>${d.name}</strong> (${d.code})`;
@@ -146,7 +145,7 @@
                 return container;
             });
 
-        // --- 4. Three.js レンダラーとカメラの設定（画面への描画） ---
+        // --- 4. レンダラーとカメラの設定 ---
         const viz = document.getElementById('globeViz');
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(viz.clientWidth, viz.clientHeight);
@@ -160,7 +159,7 @@
         const camera = new THREE.PerspectiveCamera(50, viz.clientWidth / viz.clientHeight, 1, 1000);
         camera.position.z = 300;
 
-        // --- 5. マウス操作（回転・ズーム）の実装 ---
+        // --- 5. マウス操作の実装 ---
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
 
@@ -168,7 +167,6 @@
         viz.addEventListener('mousemove', (e) => {
             const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
             if (isDragging) {
-                // ドラッグで地球儀を回転
                 Globe.rotation.y += deltaMove.x * 0.005;
                 Globe.rotation.x += deltaMove.y * 0.005;
             }
@@ -176,24 +174,19 @@
         });
         window.addEventListener('mouseup', () => { isDragging = false; });
 
-        // マウスホイールでのズーム
         viz.addEventListener('wheel', (e) => {
             camera.position.z += e.deltaY * 0.2;
-            camera.position.z = Math.min(Math.max(camera.position.z, 150), 500); // ズーム制限
+            camera.position.z = Math.min(Math.max(camera.position.z, 150), 500);
             e.preventDefault();
         }, { passive: false });
 
         // --- 6. アニメーションループ ---
         (function animate() {
-            // 自動回転させたい場合は以下のコメントアウトを解除してください
-            // if (!isDragging) Globe.rotation.y += 0.001;
-
-            Globe.tick(); // HTML要素の位置更新に必要
+            Globe.tick();
             renderer.render(scene, camera);
             requestAnimationFrame(animate);
         })();
 
-        // ウィンドウサイズ変更への対応
         window.addEventListener('resize', () => {
             camera.aspect = viz.clientWidth / viz.clientHeight;
             camera.updateProjectionMatrix();
