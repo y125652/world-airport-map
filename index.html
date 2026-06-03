@@ -22,24 +22,27 @@
     <div id="globeViz"></div>
 
     <script>
+        // 1. 地球儀を初期化
         const myGlobe = Globe()(document.getElementById('globeViz'))
-            .backgroundColor('#000000')   // 宇宙（背景）の色
-            .showAtmosphere(true)         // 大気圏エフェクト
-            .atmosphereColor('#3a86ff')   // 大気圏の色
-            
-            // 地球の表面に経緯度線を引いて立体感と地球儀感を出す
-            .labelsData([{ lat: 0, lng: 0, text: '' }]) // ライトを強制アクティブにするためのダミーデータ
-            .globeColor('#050b14') // 球体のベース色（海）
-            
-            // 地球儀のワイヤーフレーム（経緯度線）を設定
-            .hexPolygonsData([
-                { geometry: { type: "Polygon", coordinates: [[[-180, 90], [180, 90], [180, -90], [-180, -90], [-180, 90]]] } }
-            ])
-            .hexPolygonColor(() => 'rgba(58, 134, 255, 0.15)') // 線の色
-            .hexPolygonResolution(3); // グリッドの細かさ
+            .backgroundColor('#000000') // 宇宙（背景）
+            .showAtmosphere(true)       // 大気圏を表示
+            .atmosphereColor('#3a86ff') // 大気圏の光の色
+            .atmosphereDaylightAlpha(0.3);
 
-        // カメラの初期距離
+        // 2. カメラの距離を設定
         myGlobe.pointOfView({ alt: 2.5 });
+
+        // 3. 【重要】真っ黒になるのを防ぐため、3D空間のライトを強制的に自前で点灯させる
+        const scene = myGlobe.scene(); // 3D空間を取得
+        
+        // 全体を均等に照らす明るいライトを追加
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+        scene.add(ambientLight);
+
+        // 正面から照らすライトを追加して立体感を出す
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
     </script>
 </body>
 </html>
