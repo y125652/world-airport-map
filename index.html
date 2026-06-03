@@ -55,7 +55,7 @@
             { name: "ドバイ国際空港", iata: "DXB", country: "AE", lat: 25.253, lon: 55.364 }
         ];
 
-        // --- 🗺️ 完全埋め込み型・高精度世界地図データ ---
+        // --- 🗺️ 完全埋め込み型・高精度世界地図データ（通信エラー防止） ---
         const worldGeoJSON = {
             "type": "FeatureCollection",
             "features": [
@@ -74,18 +74,17 @@
             ]
         };
 
-        // --- 3Dグラフィック・スタジオ設定 ---
+        // --- 3Dグラフィック設定 ---
         const container = document.getElementById('globe-container');
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 1000);
-        camera.position.set(0, 0, 240); // 正面を向くように設定
+        camera.position.set(0, 0, 240);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(container.clientWidth, container.clientHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
 
-        // ライティング（地球全体をしっかり照らす）
         scene.add(new THREE.AmbientLight(0xffffff, 0.7));
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
         dirLight.position.set(1, 1, 1);
@@ -93,22 +92,22 @@
 
         // --- 🌎 3D地球儀の構築 ---
         const GLOBE_RADIUS = 80;
-        const globeGroup = new THREE.Group(); // 地球と陸地すべてを内包して回転させるグループ
+        const globeGroup = new THREE.Group(); 
         scene.add(globeGroup);
 
-        // 深海をイメージした濃紺の球体
+        // 深海（ネイビー）
         const oceanGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
         const oceanMat = new THREE.MeshPhongMaterial({ color: 0x0a1128, shininess: 8 });
         const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat);
         globeGroup.add(oceanMesh);
 
-        const pinGroup = new THREE.Group(); // 空港ピン・テキスト用の動的グループ
+        const pinGroup = new THREE.Group(); 
         globeGroup.add(pinGroup);
 
-        // 🔄 数学的・天文学的に正しい「緯度経度 ➔ 3D空間座標」変換関数（世界の反転を100%修正）
+        // 正しい位置計算用（反転防止数式）
         function latLonToVector3(lat, lon, radius) {
             const radLat = (lat * Math.PI) / 180;
-            const radLon = (-lon * Math.PI) / 180; // 反転防止のためのマイナス処理
+            const radLon = (-lon * Math.PI) / 180; 
             return new THREE.Vector3(
                 radius * Math.cos(radLat) * Math.sin(radLon),
                 radius * Math.sin(radLat),
@@ -116,10 +115,9 @@
             );
         }
 
-        // --- 🗺️ 陸地ポリゴンのマッピング（見やすさと感度の修正） ---
+        // --- 🗺️ 陸地ポリゴンのマッピング ---
         const countryMeshes = [];
-        const normalMaterial = new THREE.MeshPhongMaterial({ color: 0x1c2d42, side: THREE.DoubleSide, transparent: false });
-        const highlightMaterial = new THREE.MeshPhongMaterial({ color: 0x00aaff, side: THREE.DoubleSide });
+        const normalMaterial = new THREE.MeshPhongMaterial({ color: 0x1c2d42, side: THREE.DoubleSide });
 
         worldGeoJSON.features.forEach(feature => {
             const name = feature.properties.name;
@@ -129,7 +127,6 @@
 
             const polygons = type === 'Polygon' ? [coords] : coords;
             
-            // 国を管理する個別3Dオブジェクト
             const countryObject = new THREE.Group();
             countryObject.userData = { name: name, iso2: iso2, meshes: [] };
 
@@ -141,7 +138,6 @@
                 const linePoints = [];
 
                 ring.forEach((pt, idx) => {
-                    // 正しい位置に国境線を浮かせる（海+0.3）
                     const vec3 = latLonToVector3(pt[1], pt[0], GLOBE_RADIUS + 0.3);
                     linePoints.push(vec3);
 
@@ -149,11 +145,9 @@
                     else shape.lineTo(pt[0], pt[1]);
                 });
 
-                // ① 陸地のベースとなる塗りつぶしメッシュ（海と同化しない色）
                 const shapeGeo = new THREE.ShapeGeometry(shape);
                 const mesh = new THREE.Mesh(shapeGeo, normalMaterial.clone());
 
-                // 平面ポリゴンを球体表面へ寸分の狂いなくフィットさせる変形計算
                 const pos = mesh.geometry.attributes.position;
                 for (let i = 0; i < pos.count; i++) {
                     const x = pos.getX(i);
@@ -163,13 +157,12 @@
                 }
                 mesh.geometry.computeVertexNormals();
                 
-                // ホバー時に国全体を特定できるようリンクを仕込む
                 mesh.userData = { parentGroup: countryObject };
                 countryObject.add(mesh);
-                countryMeshes.push(mesh); // マウス判定用配列に格納
+                countryMeshes.push(mesh); 
                 countryObject.userData.meshes.push(mesh);
 
-                // ② 明瞭な国境線（フチ線）
+                // 国境線
                 const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
                 const lineMat = new THREE.LineBasicMaterial({ color: 0x475f77 });
                 const line = new THREE.Line(lineGeo, lineMat);
@@ -179,9 +172,8 @@
             globeGroup.add(countryObject);
         });
 
-        // --- ✈️ 動的な空港ピンと名前看板の生成関数 ---
+        // --- ✈️ 動的な空港ピンと名前看板の生成 ---
         function createAirportPins(countryCode) {
-            // 前の国のピンをすべて削除
             while(pinGroup.children.length > 0){ pinGroup.remove(pinGroup.children[0]); }
 
             const localAirports = airportData.filter(ap => ap.country === countryCode);
@@ -189,20 +181,20 @@
             localAirports.forEach(ap => {
                 const pinPos = latLonToVector3(ap.lat, ap.lon, GLOBE_RADIUS + 0.8);
 
-                // ① 鮮やかなネオンレッドの空港ピン（小さな球体）
+                // 赤い空港ピン
                 const pinGeo = new THREE.SphereGeometry(1.2, 16, 16);
                 const pinMat = new THREE.MeshBasicMaterial({ color: 0xff3300, depthTest: false });
                 const pinMesh = new THREE.Mesh(pinGeo, pinMat);
                 pinMesh.position.copy(pinPos);
                 pinGroup.add(pinMesh);
 
-                // ② 2Dテキスト看板を生成（CORSに引っかからない高解像度Canvas生成方式）
+                // 空港名テキスト（Canvas生成）
                 const canvas = document.createElement('canvas');
                 canvas.width = 512; canvas.height = 64;
                 const ctx = canvas.getContext('2d');
                 ctx.font = 'Bold 24px sans-serif';
-                ctx.fillStyle = '#ffaa00'; // 空港名テキスト（オレンジ）
-                ctx.strokeStyle = '#000000'; // 黒フチ
+                ctx.fillStyle = '#ffaa00'; 
+                ctx.strokeStyle = '#000000'; 
                 ctx.lineWidth = 5;
                 ctx.strokeText(`✈️ ${ap.name} [${ap.iata}]`, 10, 42);
                 ctx.fillText(`✈️ ${ap.name} [${ap.iata}]`, 10, 42);
@@ -211,14 +203,13 @@
                 const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
                 const sprite = new THREE.Sprite(spriteMat);
                 
-                // 地表から少し浮かせて名前を表示
                 sprite.position.copy(latLonToVector3(ap.lat, ap.lon, GLOBE_RADIUS + 6));
                 sprite.scale.set(36, 4.5, 1);
                 pinGroup.add(sprite);
             });
         }
 
-        // --- 🔎 マウスホバー処理（正確な国境検知） ---
+        // --- 🔎 マウスホバー処理（正確な検知） ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let activeCountryGroup = null;
@@ -229,7 +220,6 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
-            // マウスの直線状にある陸地メッシュを検知
             const intersects = raycaster.intersectObjects(countryMeshes);
 
             if (intersects.length > 0) {
@@ -237,7 +227,6 @@
                 const countryGroup = hitMesh.userData.parentGroup;
 
                 if (activeCountryGroup !== countryGroup) {
-                    // 以前の国のハイライトを通常色にリセット
                     if (activeCountryGroup) {
                         activeCountryGroup.userData.meshes.forEach(m => m.material.color.setHex(0x1c2d42));
                     }
@@ -245,29 +234,27 @@
                     activeCountryGroup = countryGroup;
                     const data = countryGroup.userData;
 
-                    // ① 上部ふきだしを出す（国名と2文字コード）
+                    // ① 上部ふきだし表示
                     tooltip.innerHTML = `🌍 ${data.name}`;
                     tooltip.style.display = 'block';
 
-                    // ② 乗った国すべてのポリゴンをネオンブルーにライトアップ
+                    // ② ネオンブルーにライトアップ
                     data.meshes.forEach(m => m.material.color.setHex(0x00aaff));
 
-                    // ③ 空港ピンと名前看板をパッと表示
+                    // ③ 空港ピンと名前表示
                     createAirportPins(data.iso2);
                 }
             } else {
-                // 地球の外側にマウスが外れたら全リセット
                 if (activeCountryGroup !== null) {
                     activeCountryGroup.userData.meshes.forEach(m => m.material.color.setHex(0x1c2d42));
                     activeCountryGroup = null;
                     tooltip.style.display = 'none';
-                    // ピンを全部消す
                     while(pinGroup.children.length > 0){ pinGroup.remove(pinGroup.children[0]); }
                 }
             }
         });
 
-        // --- 🖱️ 地球儀のドラッグ回転処理（感度を10分の1に調整） ---
+        // --- 🖱️ 地球儀のドラッグ回転処理（感度抑制版） ---
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
 
@@ -276,27 +263,34 @@
         container.addEventListener('mousemove', (e) => {
             const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
             if (isDragging) {
-                // 🛑 感度をこれまでの10分の1にチューニングし、回しすぎを完全に制御
                 globeGroup.rotation.y += deltaMove.x * 0.0005;
                 globeGroup.rotation.x += deltaMove.y * 0.0005;
             }
             previousMousePosition = { x: e.offsetX, y: e.offsetY };
         });
 
-        // マウスホイールによる滑らかな拡大縮小
         window.addEventListener('wheel', (e) => {
             camera.position.z += e.deltaY * 0.15;
             camera.position.z = Math.max(130, Math.min(350, camera.position.z));
         });
 
-        // --- 🔄 アニメーション自転ループ ---
+        // --- 🔄 アニメーションループ起動 ---
         function animate() {
             requestAnimationFrame(animate);
             if (!isDragging && !activeCountryGroup) {
-                globeGroup.rotation.y += 0.001; // ホバーしていない時は美しく微自転
+                globeGroup.rotation.y += 0.001; 
             }
             renderer.render(scene, camera);
         }
+        
+        // 🛑 前回ここでカットされて消えていた「実行命令」を完全記述
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
     </script>
 </body>
 </html>
