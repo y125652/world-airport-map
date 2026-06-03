@@ -71,11 +71,23 @@
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeGroup.add(globeMesh);
 
-        // 【修正】3D球面のUVマッピングに完全に一致させた2D座標変換
+        // 【数式統一①】2D地図キャンバスの展開ロジック
         function geoToCanvas(lat, lng) {
             const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
             return { x, y };
+        }
+
+        // 【数式統一②】経緯度から3DのXYZ座標に落とし込む正確な配置ロジック
+        function latLngToVector3(lat, lng, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lng + 180) * (Math.PI / 180);
+
+            // Three.js標準の球体テクスチャ展開規則（UV）に完璧に合致する数式
+            const x = -(radius * Math.sin(phi) * Math.sin(theta));
+            const y = radius * Math.cos(phi);
+            const z = radius * Math.sin(phi) * Math.cos(theta);
+            return new THREE.Vector3(x, y, z);
         }
 
         const cargoAirports = [
@@ -155,16 +167,6 @@
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 【修正】ピンの配置用の3D座標変換（キャンバス側の反転ロジックと統一）
-        function latLngToVector3(lat, lng, radius) {
-            const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (lng + 180) * (Math.PI / 180); // ここを -lng から lng に統一して反転を解消
-            const x = -(radius * Math.sin(phi) * Math.sin(theta));
-            const y = radius * Math.cos(phi);
-            const z = radius * Math.sin(phi) * Math.cos(theta);
-            return new THREE.Vector3(x, y, z);
-        }
-
         function isPointInPolygon(lat, lng, polygon) {
             let inside = false;
             for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -193,9 +195,9 @@
                 const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
 
                 if (countryName === targetCountryName) {
-                    ctx.fillStyle = '#1e90ff';  // ホバー時は鮮やかな青
+                    ctx.fillStyle = '#1e90ff';  // ホバー：鮮やかな青
                 } else {
-                    ctx.fillStyle = '#dcdcdc';  // 陸地は明るいグレー
+                    ctx.fillStyle = '#dcdcdc';  // 陸地：明るいグレー
                 }
                 ctx.strokeStyle = '#556688';
                 ctx.lineWidth = 1.5;
@@ -227,9 +229,7 @@
             .then(json => {
                 geoJsonData = json;
                 drawMap();
-                
-                // 地図データのロード完了後に空港ピンを正確に刺す
-                createAirportPins();
+                createAirportPins(); // 配置ロジック統一後にピンを刺す
             });
 
         // 4. 空港ピンの配置処理
@@ -249,8 +249,8 @@
         }
 
         scene.add(globeGroup);
-        // 日本付近が初期正面を向くように調整
-        globeGroup.rotation.y = -1.0; 
+        // 初期角度のズレを解消するためリセット（日本を初期正面に調整）
+        globeGroup.rotation.y = -Math.PI / 2; 
 
         // 5. マウス操作・ドラッグ・ズーム・ホバー処理
         let isDragging = false;
@@ -282,14 +282,18 @@
                 
                 if (globeIntersects.length > 0 && geoJsonData) {
                     const hitPoint = globeIntersects[0].point;
+                    
+                    // 回転グループ内のローカル座標系に引き戻す
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
                     
-                    // 【修正】3D空間から経緯度（Lat/Lng）を取り出す逆算ロジックも、反転を排して完全統一
-                    const rad = Math.sqrt(localPoint.x*localPoint.x + localPoint.y*localPoint.y + localPoint.z*localPoint.z);
+                    // 【数式統一③】3DのXYZ空間から正確にLat/Lng（経緯度）を逆引き算出するロジック
+                    const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
-                    let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI) + 180; // 統一対応
-                    if (lng > 180) lng -= 360;
-                    if (lng < -180) lng += 360;
+                    
+                    // テクスチャ配置関数（latLngToVector3）の逆算に完全に一致させたコード
+                    let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI) - 180;
+                    while (lng > 180) lng -= 360;
+                    while (lng < -180) lng += 360;
 
                     let foundCountry = null;
                     for (let c = 0; c < geoJsonData.features.length; c++) {
@@ -342,6 +346,7 @@
                 y: e.clientY - previousMousePosition.y
             };
 
+            // コロコロ回転の適用
             globeGroup.rotation.y += deltaMove.x * 0.005;
             globeGroup.rotation.x += deltaMove.y * 0.005;
 
