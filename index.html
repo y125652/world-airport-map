@@ -166,4 +166,39 @@
 
         viz.addEventListener('mousedown', (e) => { isDragging = true; });
         viz.addEventListener('mousemove', (e) => {
-            const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.
+            const deltaMove = { x: e.offsetX - previousMousePosition.x, y: e.offsetY - previousMousePosition.y };
+            if (isDragging) {
+                // ドラッグで地球儀を回転
+                Globe.rotation.y += deltaMove.x * 0.005;
+                Globe.rotation.x += deltaMove.y * 0.005;
+            }
+            previousMousePosition = { x: e.offsetX, y: e.offsetY };
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+
+        // マウスホイールでのズーム
+        viz.addEventListener('wheel', (e) => {
+            camera.position.z += e.deltaY * 0.2;
+            camera.position.z = Math.min(Math.max(camera.position.z, 150), 500); // ズーム制限
+            e.preventDefault();
+        }, { passive: false });
+
+        // --- 6. アニメーションループ ---
+        (function animate() {
+            // 自動回転させたい場合は以下のコメントアウトを解除してください
+            // if (!isDragging) Globe.rotation.y += 0.001;
+
+            Globe.tick(); // HTML要素の位置更新に必要
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        })();
+
+        // ウィンドウサイズ変更への対応
+        window.addEventListener('resize', () => {
+            camera.aspect = viz.clientWidth / viz.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(viz.clientWidth, viz.clientHeight);
+        });
+    </script>
+</body>
+</html>
