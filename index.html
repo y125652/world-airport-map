@@ -66,7 +66,7 @@
         }
     </style>
 
-    <script src="https://unpkg.com/globe.gl@2.32.1/dist/globe.gl.min.js"></script>
+    <script src="https://unpkg.com/globe.gl@2.26.0/dist/globe.gl.min.js"></script>
 </head>
 <body>
 
@@ -110,12 +110,11 @@
 
         // --- 2. 地球儀の初期化と設定 ---
         const myGlobe = Globe()(document.getElementById('globeViz'))
-            // テクスチャ画像を使わず、組み込みの色プロパティでCORSエラーを完全回避
+            // 正しいメソッド名（backgroundColor / baseColor）に修正
             .backgroundColor('#000000')
-            .globeColor('#111111')
+            .baseColor('#111111')
             .showAtmosphere(true)
             .atmosphereColor('#3a86ff')
-            .atmosphereDaylightAlpha(0.1)
 
             // 国境線とポリゴンの設定
             .polygonsData(countriesData.features)
