@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Globe - Perfect Face Hover (Canvas Texture)</title>
+    <title>3D Globe - Perfect Alignment & 4K Canvas Texture</title>
     <style>
         body {
             margin: 0;
@@ -101,7 +101,7 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 },
             { name: "ロンドン・ヒースロー空港 (LHR)", country: "イギリス", lat: 51.4700, lng: -0.4543 },
             { name: "ロンドン・スタンステッド空港 (STN)", country: "イギリス", lat: 51.8850, lng: 0.2350 },
-            { name: "アムステルダム・スキポール空港 (AMS)", merge: "オランダ", lat: 52.3105, lng: 4.7683 },
+            { name: "アムステルダム・スキポール空港 (AMS)", country: "オランダ", lat: 52.3105, lng: 4.7683 },
             { name: "リエージュ空港 (LGG)", country: "ベルギー", lat: 50.6374, lng: 5.4432 },
             { name: "リュブリャナ空港 (LJU)", country: "スロベニア", lat: 46.2237, lng: 14.4576 },
             { name: "ミラノ・マルペンサ空港 (MXP)", country: "イタリア", lat: 45.6300, lng: 8.7231 },
@@ -125,26 +125,28 @@
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7017, lng: -74.1469 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホル Jorge・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "フアン・サンタマリア国際空港 (SJO)", country: "コスタリカ", lat: 9.9939, lng: -84.2089 },
-            { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
+            { name: "マリスカル・スクレ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 緯度経度を3D空間のVector3座標に変換する関数
+        // 緯度経度を3D空間のVector3座標にマッピングする関数【★テクスチャの基準に完全一致するよう修正】
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (-lng + 180) * (Math.PI / 180);
-            const x = -(radius * Math.sin(phi) * Math.sin(theta));
+            // 球体のテクスチャ展開スタート地点（正面）のズレを相殺するための+90度調整
+            const theta = (lng + 90) * (Math.PI / 180);
+            
+            const x = radius * Math.sin(phi) * Math.cos(theta);
             const y = radius * Math.cos(phi);
-            const z = radius * Math.sin(phi) * Math.cos(theta);
+            const z = radius * Math.sin(phi) * Math.sin(theta);
             return new THREE.Vector3(x, y, z);
         }
 
-        // --- メモリ上のHTML5 Canvasで地図テクスチャを作成 ---
+        // --- メモリ上のHTML5 Canvasで地図テクスチャを作成【★4K超高解像度化：ボヤけ解消】 ---
         const canvas = document.createElement('canvas');
-        canvas.width = 2048;  // 球体に貼るため高解像度（2K）に設定
-        canvas.height = 1024;
+        canvas.width = 4096;  
+        canvas.height = 2048;
         const ctx = canvas.getContext('2d');
 
         // Canvasをテクスチャとして読み込み、球体メッシュを生成
@@ -157,7 +159,7 @@
         // カラーパレット設定
         const COLOR_SEA = "#1a237e";       // 海: ディープネイビー
         const COLOR_LAND = "#ffffff";      // 通常の陸地: 白
-        const COLOR_BORDER = "#d1d5db";    // 国境線: 綺麗なライトグレー
+        const COLOR_BORDER = "#d1d5db";    // 国境線: 明るいライトグレー
         const COLOR_HIGHLIGHT = "#00e6ff"; // ホバーした面: 鮮やかなネオンブルー
 
         let geoJsonData = null;
@@ -174,18 +176,18 @@
         function drawMap() {
             if (!geoJsonData) return;
 
-            // 1. 海の背景をクリア塗りつぶし
+            // 1. 海の背景を塗りつぶし
             ctx.fillStyle = COLOR_SEA;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. すべての国の「面」と「国境線」をCanvas上に一括で描画
+            // 2. すべての国の「面」と「国境線」をCanvas上に高精細に描画
             geoJsonData.features.forEach((feature, index) => {
                 const isHovered = (index === hoveredCountryIndex);
                 
-                // ホバー中ならネオンブルー、通常なら白
                 ctx.fillStyle = isHovered ? COLOR_HIGHLIGHT : COLOR_LAND;
                 ctx.strokeStyle = COLOR_BORDER;
-                ctx.lineWidth = 1.2;
+                // 4K高解像度に合わせて線の太さを最適化
+                ctx.lineWidth = 2.0;
 
                 const type = feature.geometry.type;
                 const coordinates = feature.geometry.coordinates;
@@ -197,7 +199,7 @@
                 }
             });
 
-            // Three.js 側にCanvas画像が書き換わったことを通知し、画面に反映
+            // Three.js側に更新を通知
             texture.needsUpdate = true;
         }
 
@@ -220,7 +222,7 @@
             .then(res => res.json())
             .then(geoJson => {
                 geoJsonData = geoJson;
-                drawMap(); // データ取得完了後に初回描画
+                drawMap(); // 初回描画
             });
 
         // 貨物空港ピン（赤色の3D球体）の生成
@@ -230,16 +232,13 @@
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            // 球体の表面から少し浮くように配置 (RADIUS + 0.4)
+            // ズレが解消された新しい数式に基づいて正しい位置にマッピング
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.4);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
             globeGroup.add(pin);
             pins.push(pin);
         });
-
-        // アジア方面が見えるように地球の初期角度を少し回す
-        globeGroup.rotation.y = 2.5;
 
         // マウスインタラクション変数
         let isDragging = false;
@@ -253,7 +252,6 @@
         });
 
         window.addEventListener('mousemove', (e) => {
-            // マウスのスクリーン座標をThree.jsの標準化座標（-1 ～ +1）に変換
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
@@ -269,24 +267,21 @@
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
                 
-                // 空港に乗っている時は国のハイライトを解除
                 if (hoveredCountryIndex !== null) {
                     hoveredCountryIndex = null;
                     drawMap();
                 }
             } else {
-                // 2. 空港に乗っていなければ、地球儀（球体メッシュ）のホバーを判定
+                // 2. 地球儀（球体メッシュ）のホバーを判定
                 const globeIntersects = raycaster.intersectObject(globeMesh);
                 
                 if (globeIntersects.length > 0 && geoJsonData) {
-                    // 交点部分の「UV座標（テクスチャ上の 0.0〜1.0 の位置）」を取得
                     const uv = globeIntersects[0].uv;
                     
-                    // UV座標を「経度（lng）」と「緯度（lat）」の数値に正確に復元計算
+                    // 4K解像度テクスチャの巻き方に合わせた、正確な経度・緯度の逆算式
                     const lng = uv.x * 360 - 180;
                     const lat = uv.y * 180 - 90;
 
-                    // マウスが指している経度緯度がいずれかの国のポリゴン（面）の内部にあるかを探索
                     let foundIndex = null;
                     for (let i = 0; i < geoJsonData.features.length; i++) {
                         if (isPointInFeature(lng, lat, geoJsonData.features[i])) {
@@ -296,7 +291,6 @@
                     }
 
                     if (foundIndex !== null) {
-                        // 国が見つかった場合、ラベルを表示してテクスチャを再描画（ハイライト）
                         const feature = geoJsonData.features[foundIndex];
                         const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
                         const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
@@ -307,13 +301,11 @@
                         labelEl.innerHTML = `<strong>${countryName}</strong> (${isoA2})`;
                         document.body.style.cursor = 'default';
 
-                        // 前回とホバーした国が変わった場合のみ、Canvasの再描画を走らせる（軽量化）
                         if (hoveredCountryIndex !== foundIndex) {
                             hoveredCountryIndex = foundIndex;
                             drawMap();
                         }
                     } else {
-                        // 海の上にマウスがある場合、ハイライトをリセット
                         labelEl.style.display = 'none';
                         document.body.style.cursor = 'default';
                         if (hoveredCountryIndex !== null) {
@@ -322,7 +314,6 @@
                         }
                     }
                 } else {
-                    // 地球の外側（宇宙空間）にマウスがある場合
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
                     if (hoveredCountryIndex !== null) {
@@ -332,7 +323,6 @@
                 }
             }
 
-            // 地球のドラッグ回転処理
             if (!isDragging) return;
 
             const deltaMove = {
@@ -346,7 +336,7 @@
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
-        // --- レイキャスティング法による点の内包判定（数学的アルゴリズム） ---
+        // 点の内包判定（数学的アルゴリズム）
         function isPointInFeature(lng, lat, feature) {
             const type = feature.geometry.type;
             const coords = feature.geometry.coordinates;
@@ -359,11 +349,8 @@
         }
 
         function isPointInPolygon(lng, lat, polygon) {
-            // 外郭線（1つ目のリング）の内側にあるか判定
             const inside = isPointInRing(lng, lat, polygon[0]);
             if (!inside) return false;
-            
-            // 2つ目以降のリング（湖などの内包する穴）があれば、その中に入っていないか判定
             for (let i = 1; i < polygon.length; i++) {
                 if (isPointInRing(lng, lat, polygon[i])) return false;
             }
@@ -383,21 +370,18 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
         
-        // マウスホイールによるズーム処理
         window.addEventListener('wheel', (e) => {
             currentZoom += e.deltaY * 0.1;
             currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
             camera.position.z = currentZoom;
         }, { passive: true });
 
-        // アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
         }
         animate();
 
-        // 画面リサイズへの対応
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
