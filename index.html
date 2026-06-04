@@ -66,25 +66,24 @@
         const ctx = canvas.getContext('2d');
         const texture = new THREE.CanvasTexture(canvas);
 
-        // Three.js標準のUVマッピング（左端が180度、中央が0度、右端が-180度）に強制同期させるためジオメトリの作成を変更
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ map: texture });
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeGroup.add(globeMesh);
 
-        // 【修正：数式統一①】標準の球体UV展開ルール（左が東経180度、右が西経180度）に完全一致させた2D写像
+        // 【修正】鏡写しを解消した、標準の球体UV展開ルールに完全一致させた2D写像
         function geoToCanvas(lat, lng) {
-            const x = ((180 - lng) / 360) * canvas.width;
+            const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
             return { x, y };
         }
 
-        // 【修正：数式統一②】標準UV展開に完全に連動させた3D空間のXYZ配置ロジック
+        // 【修正】鏡写しを完全に殺した、本来の地球と同じ3D空間のXYZ配置ロジック
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (180 - lng) * (Math.PI / 180); // 左右反転を殺すため 180 - lng に統一
+            const theta = (lng + 180) * (Math.PI / 180); 
 
-            const x = radius * Math.sin(phi) * Math.sin(theta);
+            const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
             const z = radius * Math.sin(phi) * Math.cos(theta);
             return new THREE.Vector3(x, y, z);
@@ -251,8 +250,8 @@
         }
 
         scene.add(globeGroup);
-        // 初期回転位置（日本が初期正面に向くように設定）
-        globeGroup.rotation.y = 0; 
+        // 日本付近が初期正面を向くように設定（反転解消に伴いリセット）
+        globeGroup.rotation.y = -2.5; 
 
         // 5. マウス操作・ドラッグ・ズーム・ホバー処理
         let isDragging = false;
@@ -286,12 +285,12 @@
                     const hitPoint = globeIntersects[0].point;
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
                     
-                    // 【修正：数式統一③】3DのXYZ空間からUV同期展開を完全に逆算する Lat/Lng 抽出アルゴリズム
+                    // 【修正】3D空間のXYZから、正しい球体UV展開ルールに基づきLat/Lng（経緯度）を逆算（反転の完全除去）
                     const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
                     
-                    // xとzの成分比から反転を排除してダイレクトに経度(lng)を逆引き
-                    let lng = 180 - Math.atan2(localPoint.x, localPoint.z) * (180 / Math.PI);
+                    // 標準展開数式に対応した正しい経度の抽出
+                    let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI) - 180;
                     while (lng > 180) lng -= 360;
                     while (lng < -180) lng += 360;
 
