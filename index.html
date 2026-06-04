@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Perfect Particle Mask</title>
+    <title>3D Vector Globe - Shader Precision Fix</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #0b0f19; font-family: Arial, sans-serif; user-select: none; }
         #canvas-container { width: 100vw; height: 100vh; }
@@ -34,7 +34,6 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // 貨物空港データ
         const cargoAirports = [
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
@@ -56,96 +55,92 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        // 透明な海オブジェクト
-        const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x1a237e, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false 
-        });
-        const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
-        baseGlobe.renderOrder = 0;
-        globeGroup.add(baseGlobe);
+        // --- GPUカスタムシェーダーによる完璧な陸地塗りつぶし ---
+        // 頂点はただの球体。その表面に「数式」で直接色を塗るため、100%ねじれもガビガビも起きません。
+        const shaderUniforms = {
+            hoveredIndex: { value: -1.0 },
+            seaColor: { value: new THREE.Color(0x1a237e) },
+            landColor: { value: new THREE.Color(0x22316c) },
+            highlightColor: { value: new THREE.Color(0x00e6ff) }
+        };
 
-        const COLOR_BORDER = 0xffffff;     
-        const COLOR_LAND_FILL = new THREE.Color(0x22316c);  
-        const COLOR_HIGHLIGHT = new THREE.Color(0x00e6ff);  
+        // 球体の各頂点に、自分がどの国に属しているかのインデックス（ID）を焼き付ける
+        const baseGeometry = new THREE.SphereGeometry(RADIUS, 180, 90);
+        const totalVertices = baseGeometry.attributes.position.count;
+        const countryIds = new Float32Array(totalVertices);
+        countryIds.fill(-1.0); // 初期値はすべて海
 
-        const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.4 });
-        
-        // --- 究極のバグ回避：地球表面を均一に覆うドット（網の目）の生成 ---
-        // 3Dの面を一切作らないため、ロシアも南極もマダガスカルも、変な直線（パスミス）は100%起きません
-        const DOT_COUNT = 45000; // ドットの密度（重い場合は30000等に下げて調整可能）
-        const dotPositions = [];
-        const dotColors = [];
-        const dotLatLngs = []; // 各ドットの緯度経度を保存しておく
-
-        for (let i = 0; i < DOT_COUNT; i++) {
-            // フィボナッチ格子法（球体表面に最も美しく均一に点を配置する数式）
-            const k = i + 0.5;
-            const phi = Math.acos(1 - 2 * k / DOT_COUNT);
-            const theta = Math.PI * (1 + Math.sqrt(5)) * k;
-
-            const x = RADIUS * Math.sin(phi) * Math.cos(theta);
-            const y = RADIUS * Math.cos(phi);
-            const z = RADIUS * Math.sin(phi) * Math.sin(theta);
-
-            dotPositions.push(x, y, z);
-            dotColors.push(COLOR_LAND_FILL.r, COLOR_LAND_FILL.g, COLOR_LAND_FILL.b);
-
-            // 3D座標から緯度・経度を正確に逆算して保持
-            const lat = 90 - (phi * 180 / Math.PI);
-            let lng = -(theta * 180 / Math.PI) - 90;
-            // 経度を -180 〜 180 の範囲に正規化
-            lng = ((lng + 180) % 360 + 360) % 360 - 180;
-
-            dotLatLngs.push({ lat, lng });
-        }
-
-        const dotGeometry = new THREE.BufferGeometry();
-        dotGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dotPositions, 3));
-        const dotColorAttribute = new THREE.Float32BufferAttribute(dotColors, 3);
-        dotGeometry.setAttribute('color', dotColorAttribute);
-
-        // 丸い光るドットを表現する軽量マテリアル
-        const dotMaterial = new THREE.PointsMaterial({
-            size: 0.7,
-            vertexColors: true,
-            transparent: true,
-            opacity: 0.9,
-            depthWrite: false
+        const baseMaterial = new THREE.ShaderMaterial({
+            uniforms: shaderUniforms,
+            vertexShader: `
+                attribute float countryId;
+                varying float vCountryId;
+                varying vec3 vNormal;
+                void main() {
+                    vCountryId = countryId;
+                    vNormal = normalize(normalMatrix * normal);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float hoveredIndex;
+                uniform vec3 seaColor;
+                uniform vec3 landColor;
+                uniform vec3 highlightColor;
+                varying float vCountryId;
+                varying vec3 vNormal;
+                void main() {
+                    vec3 finalColor = seaColor * 0.35; // 海の透明度を表現
+                    if (vCountryId >= 0.0) {
+                        if (abs(vCountryId - hoveredIndex) < 0.1) {
+                            finalColor = highlightColor;
+                        } else {
+                            finalColor = landColor;
+                        }
+                    }
+                    gl_FragColor = vec4(finalColor, 1.0);
+                }
+            `,
+            side: THREE.DoubleSide
         });
 
-        const globePoints = new THREE.Points(dotGeometry, dotMaterial);
-        globePoints.renderOrder = 1;
-        globeGroup.add(globePoints);
-
+        let baseGlobeMesh = null;
         let geoJsonData = null;
-        let hoveredCountryIndex = null;
 
-        // GeoJSONデータの取得と「3D国境線」のレンダリング
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4 });
+
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
                 geoJsonData = geoJson;
-                
-                // 初回の陸地判定（全ドットを一度スキャンして、海（透明）か陸（ネイビー）かを分ける）
-                const colors = dotGeometry.attributes.color.array;
-                for (let i = 0; i < DOT_COUNT; i++) {
-                    const dl = dotLatLngs[i];
-                    let isLand = false;
+
+                // 球体の頂点座標をスキャンし、各頂点に国IDを割り振る
+                const positions = baseGeometry.attributes.position;
+                for (let i = 0; i < totalVertices; i++) {
+                    const vx = positions.getX(i);
+                    const vy = positions.getY(i);
+                    const vz = positions.getZ(i);
+
+                    // 3D座標から正確な経度緯度を計算
+                    const hitPoint = new THREE.Vector3(vx, vy, vz).normalize();
+                    const lat = 90 - (Math.acos(hitPoint.y) * 180 / Math.PI);
+                    let lng = -(Math.atan2(hitPoint.x, hitPoint.z) * 180 / Math.PI) - 90;
+                    lng = ((lng + 180) % 360 + 360) % 360 - 180;
+
                     for (let j = 0; j < geoJson.features.length; j++) {
-                        if (isPointInFeature(dl.lng, dl.lat, geoJson.features[j])) {
-                            isLand = true;
+                        if (isPointInFeature(lng, lat, geoJson.features[j])) {
+                            countryIds[i] = parseFloat(j);
                             break;
                         }
                     }
-                    if (!isLand) {
-                        // 海の場所にあるドットは透明（非表示）にするため、色を黒（背景同化）かゼロにする
-                        colors[i * 3] = 0; colors[i * 3 + 1] = 0; colors[i * 3 + 2] = 0;
-                    }
                 }
-                dotGeometry.attributes.color.needsUpdate = true;
 
-                // 3Dベクトル国境線（超高精細・シャープ）を生成
+                baseGeometry.setAttribute('countryId', new THREE.BufferAttribute(countryIds, 1));
+                baseGlobeMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+                baseGlobeMesh.renderOrder = 0;
+                globeGroup.add(baseGlobeMesh);
+
+                // 3Dベクトル国境線を最前面に引く
                 geoJson.features.forEach((feature) => {
                     const type = feature.geometry.type;
                     const coordinates = feature.geometry.coordinates;
@@ -170,11 +165,11 @@
         }
 
         function create3DLine(pointsData) {
-            const points = pointsData.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.1));
+            const points = pointsData.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.15));
             if (points.length < 2) return;
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.renderOrder = 2; // 線はドットよりも手前
+            line.renderOrder = 2;
             globeGroup.add(line);
         }
 
@@ -185,42 +180,15 @@
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.2);
+            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.25);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
-            pin.renderOrder = 3; 
+            pin.renderOrder = 3;
             globeGroup.add(pin);
             pins.push(pin);
         });
 
-        // ホバーした国のドット色を一瞬で書き換える高速処理
-        function updatePointsLighting() {
-            if (!geoJsonData) return;
-            const colors = dotGeometry.attributes.color.array;
-
-            for (let i = 0; i < DOT_COUNT; i++) {
-                const dl = dotLatLngs[i];
-                
-                // 海のドット（元々色がゼロのもの）は計算をスキップ
-                if (colors[i * 3] === 0 && colors[i * 3 + 1] === 0 && colors[i * 3 + 2] === 0) continue;
-
-                let finalColor = COLOR_LAND_FILL;
-                
-                if (hoveredCountryIndex !== null) {
-                    // 現在ホバーされている国の内側にあるドットだけをロックオンしてネオンブルーにする
-                    if (isPointInFeature(dl.lng, dl.lat, geoJsonData.features[hoveredCountryIndex])) {
-                        finalColor = COLOR_HIGHLIGHT;
-                    }
-                }
-
-                colors[i * 3] = finalColor.r;
-                colors[i * 3 + 1] = finalColor.g;
-                colors[i * 3 + 2] = finalColor.b;
-            }
-            dotGeometry.attributes.color.needsUpdate = true;
-        }
-
-        // マウスインタラクションと数学的判定
+        // マウスインタラクション
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
@@ -239,13 +207,11 @@
                 labelEl.style.display = 'block'; labelEl.style.left = `${e.clientX}px`; labelEl.style.top = `${e.clientY}px`;
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
-                if (hoveredCountryIndex !== null) { hoveredCountryIndex = null; updatePointsLighting(); }
-            } else {
-                // ダミー球体（海メッシュ）にレイキャストを当てて正確なマウス位置の経度緯度を算出
-                const globeIntersects = raycaster.intersectObject(baseGlobe);
+                shaderUniforms.hoveredIndex.value = -1.0;
+            } else if (baseGlobeMesh) {
+                const globeIntersects = raycaster.intersectObject(baseGlobeMesh);
                 
                 if (globeIntersects.length > 0 && geoJsonData) {
-                    // 交差点の3D座標から、数学的に100%正確な経度緯度を一瞬で逆算
                     const hitPoint = globeIntersects[0].point.clone().normalize();
                     const lat = 90 - (Math.acos(hitPoint.y) * 180 / Math.PI);
                     let lng = -(Math.atan2(hitPoint.x, hitPoint.z) * 180 / Math.PI) - 90;
@@ -265,14 +231,15 @@
                         labelEl.innerHTML = `<strong>${countryName}</strong> (${isoA2})`;
                         document.body.style.cursor = 'default';
 
-                        if (hoveredCountryIndex !== foundIndex) { hoveredCountryIndex = foundIndex; updatePointsLighting(); }
+                        // GPU側に現在ホバーしている国IDを送って瞬時に色を変える
+                        shaderUniforms.hoveredIndex.value = parseFloat(foundIndex);
                     } else {
                         labelEl.style.display = 'none'; document.body.style.cursor = 'default';
-                        if (hoveredCountryIndex !== null) { hoveredCountryIndex = null; updatePointsLighting(); }
+                        shaderUniforms.hoveredIndex.value = -1.0;
                     }
                 } else {
                     labelEl.style.display = 'none'; document.body.style.cursor = 'default';
-                    if (hoveredCountryIndex !== null) { hoveredCountryIndex = null; updatePointsLighting(); }
+                    shaderUniforms.hoveredIndex.value = -1.0;
                 }
             }
 
@@ -283,7 +250,6 @@
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
-        // 高速なレイキャスティング点判定アルゴリズム
         function isPointInFeature(lng, lat, feature) {
             const type = feature.geometry.type; const coords = feature.geometry.coordinates;
             if (type === 'Polygon') { return isPointInPolygon(lng, lat, coords); } 
