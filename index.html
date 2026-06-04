@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Perfect Earcut Triangulation</title>
+    <title>3D Vector Globe - Built-in Earcut Fix</title>
     <style>
         body {
             margin: 0;
@@ -33,7 +33,6 @@
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/earcut/2.2.4/earcut.min.js"></script>
 </head>
 <body>
 
@@ -144,25 +143,23 @@
                 create3DLine(currentSegment, group);
             }
 
-            // 2. 【放射状のねじれバグを完全消滅させるEarcut処理】
-            // 頂点データをフラットな配列[x, y, x, y...]にしてEarcutに渡す
+            // 2. Earcutに渡すためのフラットな配列[lng, lat, lng, lat...]を作成
             const flatCoords = [];
             ring.forEach(coord => {
-                // ロシア等の日付変更線またぎ対策としてクランプ
                 let lng = coord[0];
                 if (lng > 179.9) lng = 179.9;
                 if (lng < -179.9) lng = -179.9;
                 flatCoords.push(lng, coord[1]);
             });
 
-            // Earcutエンジンが凹凸を完全に考慮して「正しい三角形のインデックス」を自動計算
-            const triangles = earcut(flatCoords);
+            // ★【修正の核心】Three.jsが体内に内蔵している公式のEarcutを直接呼び出す（ReferenceErrorを完全回避）
+            const triangles = THREE.Earcut.triangulate(flatCoords);
             if (triangles.length === 0) return;
 
             const geometry = new THREE.BufferGeometry();
             const positions = new Float32Array(ring.length * 3);
 
-            // 2Dの正しいトポロジーを維持したまま、3D球面座標へ綺麗にマッピング
+            // 3D球面座標へきれいにマッピング
             ring.forEach((coord, i) => {
                 let lng = coord[0];
                 if (lng > 179.9) lng = 179.9;
@@ -175,7 +172,7 @@
             });
 
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setIndex(triangles); // Earcutが弾き出した完璧なインデックスを適用
+            geometry.setIndex(triangles); 
             geometry.computeVertexNormals();
 
             const meshMaterial = new THREE.MeshBasicMaterial({ 
@@ -184,7 +181,7 @@
 
             const countryMesh = new THREE.Mesh(geometry, meshMaterial);
             countryMesh.userData = group.userData; 
-            countryMesh.renderOrder = 2; // 海(0)よりも手前
+            countryMesh.renderOrder = 2; 
             
             group.add(countryMesh);
             countryMeshes.push(countryMesh);
