@@ -71,17 +71,17 @@
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeGroup.add(globeMesh);
 
-        // 【修正】鏡写しを解消した、標準の球体UV展開ルールに完全一致させた2D写像
+        // 【確定ルール①】2D Canvas上の描画。左端が西経180度、右端が東経180度
         function geoToCanvas(lat, lng) {
             const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
             return { x, y };
         }
 
-        // 【修正】鏡写しを完全に殺した、本来の地球と同じ3D空間のXYZ配置ロジック
+        // 【確定ルール②】3D空間のピン配置。UV展開ルールに完全一致させ反転を完全に排除
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (lng + 180) * (Math.PI / 180); 
+            const theta = (-lng + 180) * (Math.PI / 180); // 正確なマッピングのために-lng
 
             const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
@@ -250,8 +250,8 @@
         }
 
         scene.add(globeGroup);
-        // 日本付近が初期正面を向くように設定（反転解消に伴いリセット）
-        globeGroup.rotation.y = -2.5; 
+        // 日本付近が初期正面を向くように設定（反転解消に対応）
+        globeGroup.rotation.y = 2.5; 
 
         // 5. マウス操作・ドラッグ・ズーム・ホバー処理
         let isDragging = false;
@@ -285,11 +285,11 @@
                     const hitPoint = globeIntersects[0].point;
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
                     
-                    // 【修正】3D空間のXYZから、正しい球体UV展開ルールに基づきLat/Lng（経緯度）を逆算（反転の完全除去）
+                    // 【確定ルール③】3D空間の交点(XYZ)から、反転を完全に殺して正確なLat/Lng（経緯度）を逆算
                     const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
                     
-                    // 標準展開数式に対応した正しい経度の抽出
+                    // 正確に西経・東経の鏡を同期させるための逆算アプローチ
                     let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI) - 180;
                     while (lng > 180) lng -= 360;
                     while (lng < -180) lng += 360;
