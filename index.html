@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Line Globe (Perfect Antimeridian Fix)</title>
+    <title>3D Pure Vector Line Globe (Flawless Canvas Texture Method)</title>
     <style>
         body {
             margin: 0;
@@ -33,7 +33,6 @@
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/earcut@2.2.4/dist/earcut.min.js"></script>
 </head>
 <body>
 
@@ -45,6 +44,7 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
+        // シーン設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -60,6 +60,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
+        // 空港データ
         const cargoAirports = [
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
@@ -72,16 +73,41 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 }
         ];
 
-        const countryMeshes = [];
-        const countryMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ffcc,       
+        // -------------------------------------------------------------
+        // 打ち手：メモリ上の2Dキャンバスで国を管理（2K高解像度）
+        // -------------------------------------------------------------
+        const mapCanvas = document.createElement('canvas');
+        mapCanvas.width = 2048;
+        mapCanvas.height = 1024;
+        const ctx = mapCanvas.getContext('2d');
+
+        // Three.jsのテクスチャとしてキャンバスを結びつける
+        const canvasTexture = new THREE.CanvasTexture(mapCanvas);
+        const globeMaterial = new THREE.MeshBasicMaterial({
+            map: canvasTexture,
             transparent: true,
-            opacity: 0.0,          
-            side: THREE.DoubleSide,
-            depthWrite: false
+            opacity: 1.0,
+            side: THREE.DoubleSide
         });
+
+        // 3D地球儀のメッシュを作成
+        const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
+        const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
+        globeMesh.userData = { type: 'globe' };
+        globeMesh.renderOrder = 1;
+        globeGroup.add(globeMesh);
+
+        // 経度緯度を2DキャンバスのX, Y座標に変換する関数
+        function lngLatToCanvas(lng, lat) {
+            const x = ((lng + 180) / 360) * mapCanvas.width;
+            const y = ((90 - lat) / 180) * mapCanvas.height;
+            return { x, y };
+        }
+
+        let countriesData = []; // GeoJSONの生データを保持する配列
         let lastHoveredCountryName = null;
 
+        // 経度経度を3D空間座標に変換（ピン・国境線用）
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng - 90) * (Math.PI / 180);
@@ -91,38 +117,34 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x1a237e, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false 
-        });
-        const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
-        baseGlobe.renderOrder = 0;
-        globeGroup.add(baseGlobe);
-
+        // 国境線の描画設定
         const COLOR_BORDER = 0xffffff;     
         const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.45 });
         
+        // GeoJSONの取得
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
+                countriesData = geoJson.features;
+                
+                // 初回描画（すべての国が透明な状態）
+                drawCanvasTexture(null);
+
+                // 国境ワイヤーフレームの生成（既存の美しい見た目をキープ）
                 geoJson.features.forEach((feature) => {
                     const type = feature.geometry.type;
                     const coordinates = feature.geometry.coordinates;
-                    const countryName = feature.properties.NAME_JA || feature.properties.NAME || "不明な国";
-
                     if (type === 'Polygon') {
-                        processPolygon(coordinates, countryName);
+                        processLinePolygon(coordinates);
                     } else if (type === 'MultiPolygon') {
-                        coordinates.forEach(polygon => processPolygon(polygon, countryName));
+                        coordinates.forEach(polygon => processLinePolygon(polygon));
                     }
                 });
             });
 
-        function processPolygon(polygon, countryName) {
+        function processLinePolygon(polygon) {
             const ring = polygon[0];
             if (ring.length < 3) return;
-
-            // 1. 国境線の描画ロジック（既存の安定版）
             let currentSegment = [];
             for (let i = 0; i < ring.length; i++) {
                 currentSegment.push(ring[i]);
@@ -133,12 +155,7 @@
                     }
                 }
             }
-            if (currentSegment.length > 0) {
-                create3DLine(currentSegment);
-            }
-
-            // 2. 完璧な国面（Mesh）の生成へ
-            createStableCountryMesh(polygon, countryName);
+            if (currentSegment.length > 0) { create3DLine(currentSegment); }
         }
 
         function create3DLine(pointsData) {
@@ -146,84 +163,72 @@
             if (points.length < 2) return;
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.renderOrder = 1;
+            line.renderOrder = 2;
             globeGroup.add(line);
         }
 
-        // 【大修正】日付変更線またぎを完全に克服したメッシュ作成ロジック
-        function createStableCountryMesh(polygon, name) {
-            const flatVertices = [];
-            const holes = [];
-            
-            // このポリゴンが「日付変更線をまたいでいるか（ロシア等）」を事前チェック
-            let usesAntimeridianFix = false;
-            const outerRing = polygon[0];
-            for (let i = 0; i < outerRing.length - 1; i++) {
-                if (Math.abs(outerRing[i][0] - outerRing[i+1][0]) > 180) {
-                    usesAntimeridianFix = true;
-                    break;
-                }
-            }
+        // -------------------------------------------------------------
+        // キャンバスに国を描画するコアロジック（2Dなので絶対にバグらない）
+        // -------------------------------------------------------------
+        function drawCanvasTexture(highlightCountryName) {
+            // キャンバスをクリア（ベースの薄青い海を塗る）
+            ctx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+            ctx.fillStyle = "rgba(26, 35, 126, 0.2)";
+            ctx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
 
-            // 経度を統一するヘルパー関数
-            // 修正の要：ロシアなどの東端（西経に入り込んだデータ）のマイナス経度を「180〜360」へ変換する
-            function fixLng(lng) {
-                if (usesAntimeridianFix && lng < 0) {
-                    return lng + 360;
-                }
-                return lng;
-            }
+            countriesData.forEach(feature => {
+                const countryName = feature.properties.NAME_JA || feature.properties.NAME || "不明な国";
+                const isHighlight = (countryName === highlightCountryName);
+                
+                // ハイライト対象ならミントグリーン、それ以外は完全に透明
+                if (!isHighlight) return; 
+                
+                ctx.fillStyle = "rgba(0, 255, 204, 0.25)";
+                ctx.beginPath();
 
-            // 外郭の処理
-            outerRing.forEach(coord => {
-                flatVertices.push(fixLng(coord[0]), coord[1]);
+                const type = feature.geometry.type;
+                const coords = feature.geometry.coordinates;
+
+                if (type === 'Polygon') {
+                    drawCoordinates(coords);
+                } else if (type === 'MultiPolygon') {
+                    coords.forEach(polygon => drawCoordinates(polygon));
+                }
             });
 
-            // 穴（内郭）の処理
-            let holeIndex = outerRing.length;
-            for (let i = 1; i < polygon.length; i++) {
-                holes.push(holeIndex);
-                polygon[i].forEach(coord => {
-                    flatVertices.push(fixLng(coord[0]), coord[1]);
-                });
-                holeIndex += polygon[i].length;
-            }
-
-            // Earcutで2D三角形に綺麗に分割
-            const triangles = earcut(flatVertices, holes, 2);
-            if (!triangles || triangles.length === 0) return;
-
-            const geometry = new THREE.BufferGeometry();
-            const positions = [];
-
-            // 分割された2D三角形を3D球体に再マッピング
-            for (let i = 0; i < triangles.length; i++) {
-                const index = triangles[i];
-                let lng = flatVertices[index * 2];
-                const lat = flatVertices[index * 2 + 1];
-                
-                // 360度座標系に逃がしていた経度を、本来の地球儀の座標（-180〜180）に戻す
-                if (lng > 180) {
-                    lng -= 360;
-                }
-                
-                const vertex3D = latLngToVector3(lat, lng, RADIUS + 0.05);
-                positions.push(vertex3D.x, vertex3D.y, vertex3D.z);
-            }
-
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-            geometry.computeVertexNormals();
-
-            const mat = countryMaterial.clone();
-            const mesh = new THREE.Mesh(geometry, mat);
-            mesh.userData = { type: 'country', name: name };
-            mesh.renderOrder = 2;
-
-            globeGroup.add(mesh);
-            countryMeshes.push(mesh);
+            // Three.js側にキャンバスが更新されたことを通知
+            canvasTexture.needsUpdate = true;
         }
 
-        // 貨物空港ピン
+        function drawCoordinates(polygon) {
+            // 外郭を描画
+            const outerRing = polygon[0];
+            let pStart = lngLatToCanvas(outerRing[0][0], outerRing[0][1]);
+            ctx.moveTo(pStart.x, pStart.y);
+
+            for (let i = 1; i < outerRing.length; i++) {
+                let p = lngLatToCanvas(outerRing[i][0], outerRing[i][1]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // 2D平面上での「点が含まれるか（多角形内包判定）」アルゴリズム（レイキャスティング法）
+        function isPointInPolygon(point, polygon) {
+            const x = point[0], y = point[1];
+            let inside = false;
+            const ring = polygon[0];
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                const xi = ring[i][0], yi = ring[i][1];
+                const xj = ring[j][0], yj = ring[j][1];
+                const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // 空港ピン
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(0.7, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
@@ -250,6 +255,7 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
+            // 1. 空港ピンのホバー判定
             const airportIntersects = raycaster.intersectObjects(pins);
             let isHoveringAirport = false;
 
@@ -266,24 +272,47 @@
                 document.body.style.cursor = 'default';
             }
 
-            const countryIntersects = raycaster.intersectObjects(countryMeshes);
+            // 2. 国のホバー判定（球体のUV座標からキャンバス座標を割り出す最強の方法）
             let currentHoveredCountryName = null;
-            if (countryIntersects.length > 0 && !isHoveringAirport) {
-                currentHoveredCountryName = countryIntersects[0].object.userData.name;
+            const globeIntersects = raycaster.intersectObject(globeMesh);
+
+            if (globeIntersects.length > 0 && !isHoveringAirport) {
+                const hit = globeIntersects[0];
+                if (hit.uv) {
+                    // 3D球体上のUV座標（0〜1）から、正確な緯度経度を逆算
+                    const lng = (hit.uv.x * 360) - 180;
+                    const lat = (hit.uv.y * 180) - 90;
+
+                    // どの国のポリゴンの中にこの緯度経度があるかを高速判定
+                    for (let i = 0; i < countriesData.length; i++) {
+                        const feature = countriesData[i];
+                        const type = feature.geometry.type;
+                        const coords = feature.geometry.coordinates;
+                        let match = false;
+
+                        if (type === 'Polygon') {
+                            if (isPointInPolygon([lng, lat], coords)) match = true;
+                        } else if (type === 'MultiPolygon') {
+                            for (let j = 0; j < coords.length; j++) {
+                                if (isPointInPolygon([lng, lat], coords[j])) { match = true; break; }
+                            }
+                        }
+
+                        if (match) {
+                            currentHoveredCountryName = feature.properties.NAME_JA || feature.properties.NAME || "不明な国";
+                            break;
+                        }
+                    }
+                }
             }
 
+            // ホバーしている国が変わった場合のみ、キャンバスを再描画（超高効率）
             if (currentHoveredCountryName !== lastHoveredCountryName) {
-                countryMeshes.forEach(mesh => {
-                    if (mesh.userData.name === lastHoveredCountryName) {
-                        mesh.material.opacity = 0.0; 
-                    }
-                    if (mesh.userData.name === currentHoveredCountryName) {
-                        mesh.material.opacity = 0.25; 
-                    }
-                });
+                drawCanvasTexture(currentHoveredCountryName);
                 lastHoveredCountryName = currentHoveredCountryName;
             }
 
+            // 国名ラベルの表示
             if (currentHoveredCountryName && !isHoveringAirport) {
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
@@ -291,6 +320,7 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}</strong>`;
             }
 
+            // 3. 地球儀のドラッグ回転処理
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.004;
