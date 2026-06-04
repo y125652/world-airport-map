@@ -66,7 +66,6 @@
         const ctx = canvas.getContext('2d');
         const texture = new THREE.CanvasTexture(canvas);
 
-        // Three.js標準球体のUVマッピングルールに完全に適応させます
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ map: texture });
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
@@ -79,14 +78,15 @@
             return { x, y };
         }
 
-        // 【確定ルール②】Three.js標準テクスチャ球面（Zの正が経度0、Xの負が東経90）に100%一致させた3D配置
+        // 【修正：数式統一②】Three.jsの標準球体UV展開（画像左端がZ軸奥から巻き付く仕様）に完全一致させた3D空間配置
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (lng + 90) * (Math.PI / 180); // 原点位相を+90度補正して同期
+            const theta = (lng) * (Math.PI / 180); // 位相のズレを排除するため、シンプルに lng をそのままラジアンに
 
-            const x = -radius * Math.sin(phi) * Math.cos(theta);
+            // Three.jsのデフォルトのテクスチャ貼り付け位置（経度0度がZの正）に完全同期する標準極座標式
+            const x = -radius * Math.sin(phi) * Math.sin(theta);
             const y = radius * Math.cos(phi);
-            const z = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.sin(phi) * Math.cos(theta);
             return new THREE.Vector3(x, y, z);
         }
 
@@ -146,7 +146,7 @@
             { name: "イスタンブール空港 (IST)", country: "トルコ", lat: 41.2753, lng: 28.7519 },
             { name: "ドバイ国際空港 (DXB)", country: "アラブ首長国連邦", lat: 25.2532, lng: 55.3657 },
             { name: "アール・マクトゥーム国際空港 (DWC)", country: "アラブ首長国連邦", lat: 24.8961, lng: 55.1614 },
-            { name: "カタール・ハマド国際空港 DOH)", country: "カタール", lat: 25.2611, lng: 51.5651 },
+            { name: "カタール・ハマド国際空港 (DOH)", country: "カタール", lat: 25.2611, lng: 51.5651 },
             { name: "キング・ファハド国際空港 (DMM)", country: "サウジアラビア", lat: 26.4712, lng: 49.7979 },
             { name: "ベングリオン国際空港 (TLV)", country: "イスラエル", lat: 32.0056, lng: 34.8854 },
             { name: "カイロ国際空港 (CAI)", country: "エジプト", lat: 30.1219, lng: 31.4056 },
@@ -162,7 +162,7 @@
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7017, lng: -74.1469 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
             { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
-            { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
+            { name: "トクメン国際空港 (PTY)", city: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "フアン・サンタマリア国際空港 (SJO)", country: "コスタリカ", lat: 9.9939, lng: -84.2089 },
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
@@ -251,7 +251,7 @@
         }
 
         scene.add(globeGroup);
-        // 初期角度（アジアが見えやすい角度）
+        // 初期角度（アジア正面）
         globeGroup.rotation.y = 0; 
 
         // 5. マウス操作・ドラッグ・ズーム・ホバー処理
@@ -286,12 +286,12 @@
                     const hitPoint = globeIntersects[0].point;
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
                     
-                    // 【確定ルール③】3D空間の交点(XYZ)から、反転を完全に排除し、CanvasのUVマッピングに完璧に同期させた逆算式
+                    // 【修正：数式統一③】3D空間の交点(XYZ)から、90度のズレを完全に排除して正確なLat/Lng（経緯度）を逆算
                     const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
                     
-                    // XとZの抽出位相を確定ルール②の式と逆算反転させて完全合致
-                    let lng = Math.atan2(localPoint.z, -localPoint.x) * (180 / Math.PI) - 90;
+                    // シンプルに atan2 のアークタンジェントから経度(lng)を直接抽出
+                    let lng = Math.atan2(-localPoint.x, localPoint.z) * (180 / Math.PI);
                     while (lng > 180) lng -= 360;
                     while (lng < -180) lng += 360;
 
