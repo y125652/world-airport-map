@@ -43,7 +43,6 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
-        // 1. シーン・カメラ・レンダラーの設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -58,39 +57,13 @@
         container.appendChild(renderer.domElement);
 
         const globeGroup = new THREE.Group();
-
-        // 2. 高解像度キャンバステクスチャの生成
-        const canvas = document.createElement('canvas');
-        canvas.width = 4096;
-        canvas.height = 2048;
-        const ctx = canvas.getContext('2d');
-        const texture = new THREE.CanvasTexture(canvas);
-
-        const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const globeMaterial = new THREE.MeshBasicMaterial({ map: texture });
-        const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
-        globeGroup.add(globeMesh);
-
-        // geoToCanvas（見た目）は標準マッピングのまま維持
-        function geoToCanvas(lat, lng) {
-            const x = ((lng + 180) / 360) * canvas.width;
-            const y = ((90 - lat) / 180) * canvas.height;
-            return { x, y };
-        }
-
-        // latLngToVector3（ピン）をThree.jsの標準球体UVマッピングに完全一本化する新数式
-        function latLngToVector3(lat, lng, radius) {
-            const phi = (90 - lat) * (Math.PI / 180);
-            const theta = (lng + 90) * (Math.PI / 180); // 原点位相を+90度補正して同期
-
-            const x = -radius * Math.sin(phi) * Math.cos(theta);
-            const y = radius * Math.cos(phi);
-            const z = radius * Math.sin(phi) * Math.sin(theta);
-            return new THREE.Vector3(x, y, z);
-        }
+        const sphereGeometry = new THREE.SphereGeometry(RADIUS, 32, 32);
+        const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x3a86ff });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        globeGroup.add(sphere);
 
         const cargoAirports = [
-            // アジア・オセアニア
+            // アジアー・オセアニア
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
             { name: "香港国際空港 (HKG)", country: "香港", lat: 22.3080, lng: 113.9185 },
@@ -166,98 +139,111 @@
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        function isPointInPolygon(lat, lng, polygon) {
-            let inside = false;
-            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-                const xi = polygon[i][0], yi = polygon[i][1];
-                const xj = polygon[j][0], yj = polygon[j][1];
-                const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
+        function latLngToVector3(lat, lng, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (-lng + 180) * (Math.PI / 180);
+
+            const x = -(radius * Math.sin(phi) * Math.sin(theta));
+            const y = radius * Math.cos(phi);
+            const z = radius * Math.sin(phi) * Math.cos(theta);
+
+            return new THREE.Vector3(x, y, z);
         }
 
-        let geoJsonData = null;
-        let hoveredCountryName = "";
+        const countryMeshes = [];
 
-        // 3. 地図描画関数
-        function drawMap(targetCountryName = "") {
-            if (!geoJsonData) return;
-
-            // 海の色
-            ctx.fillStyle = '#051026';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            geoJsonData.features.forEach(feature => {
-                const type = feature.geometry.type;
-                const coordinates = feature.geometry.coordinates;
-                const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
-
-                if (countryName === targetCountryName) {
-                    ctx.fillStyle = '#1e90ff';  // ホバー：鮮やかな青
-                } else {
-                    ctx.fillStyle = '#dcdcdc';  // 陸地：明るいグレー
-                }
-                ctx.strokeStyle = '#556688'; // 国境線
-                ctx.lineWidth = 1.5;
-
-                if (type === 'Polygon') {
-                    renderPolygon(coordinates);
-                } else if (type === 'MultiPolygon') {
-                    coordinates.forEach(polygon => renderPolygon(polygon));
-                }
-            });
-
-            texture.needsUpdate = true;
-        }
-
-        function renderPolygon(polygon) {
-            ctx.beginPath();
-            polygon.forEach(ring => {
-                ring.forEach((coord, i) => {
-                    const pos = geoToCanvas(coord[1], coord[0]);
-                    if (i === 0) ctx.moveTo(pos.x, pos.y);
-                    else ctx.lineTo(pos.x, pos.y);
-                });
-            });
-            ctx.fill();
-            ctx.stroke();
-        }
-
-        // 国境データのロード
+        // 2レターコード（ISO_A2）が確実に格納されているGeoJSONソースへ変更
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
-            .then(json => {
-                geoJsonData = json;
-                drawMap();
-                createAirportPins();
+            .then(geoJson => {
+                const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+                const countryMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xffffff, 
+                    transparent: true, 
+                    opacity: 0.0, 
+                    side: THREE.DoubleSide
+                });
+
+                geoJson.features.forEach(feature => {
+                    const type = feature.geometry.type;
+                    const coordinates = feature.geometry.coordinates;
+                    
+                    // Natural Earthデータのプロパティ名（NAME_JAがあれば日本語、なければNAME）
+                    const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
+                    // 2レターコードプロパティ(ISO_A2)を取得
+                    const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
+
+                    if (type === 'Polygon') {
+                        createCountrySector(coordinates, lineMaterial, countryMaterial, countryName, isoA2);
+                    } else if (type === 'MultiPolygon') {
+                        coordinates.forEach(polygon => {
+                            createCountrySector(polygon, lineMaterial, countryMaterial, countryName, isoA2);
+                        });
+                    }
+                });
             });
 
-        // 4. 空港ピンの配置処理
+        function createCountrySector(polygonCoords, lineMat, meshMat, name, iso2) {
+            const outerCoords = polygonCoords[0];
+            const points = [];
+            const shape = new THREE.Shape();
+
+            outerCoords.forEach((coord, index) => {
+                const lng = coord[0];
+                const lat = coord[1];
+                points.push(latLngToVector3(lat, lng, RADIUS + 0.1));
+
+                if(index === 0) {
+                    shape.moveTo(lng, lat);
+                } else {
+                    shape.lineTo(lng, lat);
+                }
+            });
+
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(lineGeometry, lineMat);
+            globeGroup.add(line);
+
+            try {
+                const shapeGeom = new THREE.ShapeGeometry(shape);
+                const countryMesh = new THREE.Mesh(shapeGeom, meshMat.clone());
+
+                const posAttr = countryMesh.geometry.attributes.position;
+                for (let i = 0; i < posAttr.count; i++) {
+                    const lng = posAttr.getX(i);
+                    const lat = posAttr.getY(i);
+                    const v3 = latLngToVector3(lat, lng, RADIUS + 0.05);
+                    posAttr.setXYZ(i, v3.x, v3.y, v3.z);
+                }
+                countryMesh.geometry.computeVertexNormals();
+                
+                countryMesh.userData = { type: 'country', name: name, iso2: iso2 };
+                globeGroup.add(countryMesh);
+                countryMeshes.push(countryMesh);
+            } catch(e) {}
+        }
+
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
 
-        function createAirportPins() {
-            cargoAirports.forEach(airport => {
-                const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-                const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.3);
-                pin.position.copy(pos);
-                pin.userData = { type: 'airport', name: airport.name, country: airport.country };
-                globeGroup.add(pin);
-                pins.push(pin);
-            });
-        }
+        cargoAirports.forEach(airport => {
+            const pin = new THREE.Mesh(pinGeometry, pinMaterial);
+            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.4);
+            pin.position.copy(pos);
+            pin.userData = { type: 'airport', name: airport.name, country: airport.country };
+            globeGroup.add(pin);
+            pins.push(pin);
+        });
 
         scene.add(globeGroup);
-        // 初期角度（アジア正面）
-        globeGroup.rotation.y = 0; 
+        globeGroup.rotation.y = 2.5;
 
-        // 5. マウス操作・ドラッグ・ズーム・ホバー処理
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
+        let lastHoveredCountry = null;
 
         window.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -278,63 +264,34 @@
                 labelEl.style.top = `${e.clientY}px`;
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
-            } else {
-                const globeIntersects = raycaster.intersectObject(globeMesh);
                 
-                if (globeIntersects.length > 0 && geoJsonData) {
-                    const hitPoint = globeIntersects[0].point;
-                    const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
+                if (lastHoveredCountry) {
+                    lastHoveredCountry.material.opacity = 0.0;
+                    lastHoveredCountry = null;
+                }
+            } else {
+                const countryIntersects = raycaster.intersectObjects(countryMeshes);
+                
+                if (lastHoveredCountry) {
+                    lastHoveredCountry.material.opacity = 0.0;
+                    lastHoveredCountry = null;
+                }
+
+                if (countryIntersects.length > 0) {
+                    const hitCountry = countryIntersects[0].object;
+                    const data = hitCountry.userData;
                     
-                    // 【確定ルール③】3D空間の交点(XYZ)から、左右反転・軸ズレを100%排除して正確にLat/Lng（経緯度）を逆算する新ロジック
-                    const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
-                    const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
-                    
-                    // XとZの抽出位相を確定ルール②の式と逆算反転させて完全合致
-                    let lng = Math.atan2(localPoint.z, -localPoint.x) * (180 / Math.PI) - 90;
-                    while (lng > 180) lng -= 360;
-                    while (lng < -180) lng += 360;
+                    labelEl.style.display = 'block';
+                    labelEl.style.left = `${e.clientX}px`;
+                    labelEl.style.top = `${e.clientY}px`;
+                    labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso2})`;
+                    document.body.style.cursor = 'default';
 
-                    let foundCountry = null;
-                    for (let c = 0; c < geoJsonData.features.length; c++) {
-                        const feat = geoJsonData.features[c];
-                        if (feat.geometry.type === 'Polygon') {
-                            if (isPointInPolygon(lat, lng, feat.geometry.coordinates[0])) { foundCountry = feat; break; }
-                        } else {
-                            for (let p = 0; p < feat.geometry.coordinates.length; p++) {
-                                if (isPointInPolygon(lat, lng, feat.geometry.coordinates[p][0])) { foundCountry = feat; break; }
-                            }
-                        }
-                    }
-
-                    if (foundCountry) {
-                        const name = foundCountry.properties.NAME_JA || foundCountry.properties.NAME || "Unknown";
-                        const iso2 = foundCountry.properties.ISO_A2 || foundCountry.properties.iso_a2 || "??";
-                        
-                        labelEl.style.display = 'block';
-                        labelEl.style.left = `${e.clientX}px`;
-                        labelEl.style.top = `${e.clientY}px`;
-                        labelEl.innerHTML = `<strong>${name}</strong> (${iso2})`;
-                        document.body.style.cursor = 'default';
-
-                        if (hoveredCountryName !== name) {
-                            hoveredCountryName = name;
-                            drawMap(name);
-                        }
-                    } else {
-                        labelEl.style.display = 'none';
-                        document.body.style.cursor = 'default';
-                        if (hoveredCountryName !== "") {
-                            hoveredCountryName = "";
-                            drawMap();
-                        }
-                    }
+                    hitCountry.material.opacity = 0.25;
+                    lastHoveredCountry = hitCountry;
                 } else {
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
-                    if (hoveredCountryName !== "") {
-                        hoveredCountryName = "";
-                        drawMap();
-                    }
                 }
             }
 
