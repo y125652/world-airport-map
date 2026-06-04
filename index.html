@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Perfect Vector Triangulation</title>
+    <title>3D Vector Globe - Perfect Earcut Triangulation</title>
     <style>
         body {
             margin: 0;
@@ -33,7 +33,7 @@
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/earcut/2.2.4/earcut.min.js"></script>
 </head>
 <body>
 
@@ -95,19 +95,13 @@
         baseGlobe.renderOrder = 0;
         globeGroup.add(baseGlobe);
 
-        // カラーパレット
+        // カラーテーマ
         const COLOR_BORDER = 0xffffff;     
         const COLOR_LAND_FILL = 0x22316c;  
         const COLOR_HIGHLIGHT = 0x00e6ff;  
 
         const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.4 });
         
-        // --- D3.js の緯度経度⇒3D球面幾何学の数学的変換を設定 ---
-        // これを噛ませることで、ロシアや南極のような複雑な形（凹ポリゴン）の三角形分割バグを裏で完璧に事前修正します
-        const convertGeoToPoints = (coords, radius) => {
-            return coords.map(c => latLngToVector3(c[1], c[0], radius));
-        };
-
         // GeoJSONデータの取得
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
@@ -119,70 +113,82 @@
                     
                     countryGroup.userData = { index: countryIndex, name: countryName, iso: isoA2 };
 
-                    // D3の球面ポリゴンカッター（日付変更線や極点のパスのねじれを数学的に前処理して自動カットする機能）
-                    // 以前のエラー原因を完全排除した、最新D3の安全な実装です
-                    const polygons = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+                    const type = feature.geometry.type;
+                    const coordinates = feature.geometry.coordinates;
 
-                    polygons.forEach(polygon => {
-                        const ring = polygon[0];
-                        if (ring.length < 3) return;
-
-                        // 1. カミソリシャープな3Dベクトル国境線（Line）の生成
-                        let currentSegment = [];
-                        for (let i = 0; i < ring.length; i++) {
-                            currentSegment.push(ring[i]);
-                            if (i < ring.length - 1) {
-                                if (Math.abs(ring[i][0] - ring[i+1][0]) > 180) {
-                                    create3DLine(currentSegment, countryGroup);
-                                    currentSegment = [];
-                                }
-                            }
-                        }
-                        if (currentSegment.length > 0) {
-                            create3DLine(currentSegment, countryGroup);
-                        }
-
-                        // 2. 【★イラレのパスミス完全解消】
-                        // Three.jsのShapeGeometryを使わず、D3経由でポリゴン内の頂点を『正しく矛盾のない三角形(インデックス)』に自動で綺麗に繋ぎ直します。
-                        const geometry = new THREE.BufferGeometry();
-                        const vertices = [];
-                        const indices = [];
-
-                        // 簡易的な耳切り法（Ear Clipping）をインラインで安全に実行し、多角形を完璧に三角形の集まりに変える
-                        // これによりロシアや南極の中心が直線で引き裂かれるバグが100%消滅します
-                        const convertedPoints = ring.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.08));
-                        
-                        // 頂点バッファの作成
-                        const positions = new Float32Array(convertedPoints.length * 3);
-                        for(let i=0; i<convertedPoints.length; i++){
-                            positions[i*3] = convertedPoints[i].x;
-                            positions[i*3+1] = convertedPoints[i].y;
-                            positions[i*3+2] = convertedPoints[i].z;
-                        }
-                        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-                        // 凹凸多角形（非凸多角形）を綺麗に三角形のインデックスに分割する安全なループ
-                        for (let i = 1; i < convertedPoints.length - 1; i++) {
-                            indices.push(0, i, i + 1);
-                        }
-                        geometry.setIndex(indices);
-                        geometry.computeVertexNormals();
-
-                        const meshMaterial = new THREE.MeshBasicMaterial({ 
-                            color: COLOR_LAND_FILL, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: true
-                        });
-
-                        const countryMesh = new THREE.Mesh(geometry, meshMaterial);
-                        countryMesh.userData = countryGroup.userData; 
-                        countryMesh.renderOrder = 2; // 海より手前
-                        
-                        countryGroup.add(countryMesh);
-                        countryMeshes.push(countryMesh);
-                    });
-
+                    if (type === 'Polygon') {
+                        processPolygon(coordinates, countryGroup);
+                    } else if (type === 'MultiPolygon') {
+                        coordinates.forEach(polygon => processPolygon(polygon, countryGroup));
+                    }
                     globeGroup.add(countryGroup);
                 });
             });
+
+        function processPolygon(polygon, group) {
+            const ring = polygon[0];
+            if (ring.length < 3) return;
+
+            // 1. カミソリシャープな3Dベクトル国境線（Line）の生成
+            let currentSegment = [];
+            for (let i = 0; i < ring.length; i++) {
+                currentSegment.push(ring[i]);
+                if (i < ring.length - 1) {
+                    if (Math.abs(ring[i][0] - ring[i+1][0]) > 180) {
+                        create3DLine(currentSegment, group);
+                        currentSegment = [];
+                    }
+                }
+            }
+            if (currentSegment.length > 0) {
+                create3DLine(currentSegment, group);
+            }
+
+            // 2. 【放射状のねじれバグを完全消滅させるEarcut処理】
+            // 頂点データをフラットな配列[x, y, x, y...]にしてEarcutに渡す
+            const flatCoords = [];
+            ring.forEach(coord => {
+                // ロシア等の日付変更線またぎ対策としてクランプ
+                let lng = coord[0];
+                if (lng > 179.9) lng = 179.9;
+                if (lng < -179.9) lng = -179.9;
+                flatCoords.push(lng, coord[1]);
+            });
+
+            // Earcutエンジンが凹凸を完全に考慮して「正しい三角形のインデックス」を自動計算
+            const triangles = earcut(flatCoords);
+            if (triangles.length === 0) return;
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(ring.length * 3);
+
+            // 2Dの正しいトポロジーを維持したまま、3D球面座標へ綺麗にマッピング
+            ring.forEach((coord, i) => {
+                let lng = coord[0];
+                if (lng > 179.9) lng = 179.9;
+                if (lng < -179.9) lng = -179.9;
+
+                const vec3 = latLngToVector3(coord[1], lng, RADIUS + 0.08); 
+                positions[i * 3] = vec3.x;
+                positions[i * 3 + 1] = vec3.y;
+                positions[i * 3 + 2] = vec3.z;
+            });
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setIndex(triangles); // Earcutが弾き出した完璧なインデックスを適用
+            geometry.computeVertexNormals();
+
+            const meshMaterial = new THREE.MeshBasicMaterial({ 
+                color: COLOR_LAND_FILL, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: true
+            });
+
+            const countryMesh = new THREE.Mesh(geometry, meshMaterial);
+            countryMesh.userData = group.userData; 
+            countryMesh.renderOrder = 2; // 海(0)よりも手前
+            
+            group.add(countryMesh);
+            countryMeshes.push(countryMesh);
+        }
 
         // 3D国境線生成ヘルパー
         function create3DLine(pointsData, group) {
@@ -190,7 +196,7 @@
             if (points.length < 2) return;
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.renderOrder = 3; // 最前面レイヤー
+            line.renderOrder = 3;
             group.add(line);
         }
 
@@ -249,6 +255,12 @@
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
         window.addEventListener('mouseup', () => { isDragging = false; });
+        
+        window.addEventListener('wheel', (e) => {
+            currentZoom += e.deltaY * 0.1;
+            currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
+            camera.position.z = currentZoom;
+        }, { passive: true });
 
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
         animate();
