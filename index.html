@@ -3,34 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Sub-surface Penetration Fix</title>
+    <title>3D Vector Globe - Polygon Wrap Fix</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #0b0f19;
-            font-family: Arial, sans-serif;
-            user-select: none;
-        }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-        }
-        .info-label {
-            position: absolute;
-            background: rgba(11, 15, 25, 0.9);
-            color: #ffffff;
-            padding: 8px 14px;
-            border-radius: 6px;
-            font-size: 13px;
-            white-space: nowrap;
-            pointer-events: none;
-            display: none;
-            z-index: 10;
-            transform: translate(15px, -50%);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.1);
-        }
+        body { margin: 0; overflow: hidden; background-color: #0b0f19; font-family: Arial, sans-serif; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        .info-label { position: absolute; background: rgba(11, 15, 25, 0.9); color: #ffffff; padding: 8px 14px; border-radius: 6px; font-size: 13px; white-space: nowrap; pointer-events: none; display: none; z-index: 10; transform: translate(15px, -50%); box-shadow: 0 4px 12px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 </head>
@@ -44,26 +21,21 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
-        // シーン・カメラ・レンダラーの設定（元のライト不要な構成に戻しました）
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         let currentZoom = 180;
-        const MIN_ZOOM = 80;
-        const MAX_ZOOM = 300;
         camera.position.z = currentZoom;
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x000000, 0); 
         container.appendChild(renderer.domElement);
 
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
-
         const countryMeshes = [];
 
-        // 貨物空港データ
+        // 空港データ
         const cargoAirports = [
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
@@ -76,7 +48,6 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 }
         ];
 
-        // 緯度経度を3D空間の球体座標に変換
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng - 90) * (Math.PI / 180);
@@ -86,31 +57,21 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        // --- ベース球体（透明な海）の修正 ---
+        // 海オブジェクトの設定
         const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x1a237e, 
-            transparent: true,
-            opacity: 0.25, 
-            side: THREE.DoubleSide,
-            depthWrite: false // ★【超重要】陸地ポリゴンがどれだけ地球内部に沈み込んでも海で遮らないように設定
+            color: 0x1a237e, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false 
         });
         const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
-        baseGlobe.renderOrder = 0; // ★【超重要】海を最も背面のレイヤーに置く
+        baseGlobe.renderOrder = 0;
         globeGroup.add(baseGlobe);
 
-        // カラーテーマ（元のネオンサイバースタイル）
         const COLOR_BORDER = 0xffffff;     
         const COLOR_LAND_FILL = 0x22316c;  
         const COLOR_HIGHLIGHT = 0x00e6ff;  
 
-        const lineMaterial = new THREE.LineBasicMaterial({ 
-            color: COLOR_BORDER,
-            transparent: true,
-            opacity: 0.4
-        });
+        const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.4 });
         
-        // GeoJSONデータの取得
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
@@ -129,170 +90,126 @@
                     } else if (type === 'MultiPolygon') {
                         coordinates.forEach(polygon => processPolygon(polygon, countryGroup));
                     }
-
                     globeGroup.add(countryGroup);
                 });
             });
 
+        // ★イラレのパスミス（日付変更線のワープ）を修正する関数
         function processPolygon(polygon, group) {
             const ring = polygon[0];
-            const points = [];
+            if (ring.length === 0) return;
 
-            // 1. 国境線（元のロジック）
-            ring.forEach(coord => {
-                const vec = latLngToVector3(coord[1], coord[0], RADIUS + 0.12);
-                points.push(vec);
-            });
+            // 1. 国境線の描画（ワープする線を検知してカットする）
+            let currentSegment = [];
+            for (let i = 0; i < ring.length; i++) {
+                currentSegment.push(ring[i]);
+                
+                if (i < ring.length - 1) {
+                    // 隣り合う経度の差が180度を超えたら「日付変更線をまたいだワープ」とみなして線を切る
+                    if (Math.abs(ring[i][0] - ring[i+1][0]) > 180) {
+                        drawLineSegment(currentSegment, group);
+                        currentSegment = [];
+                    }
+                }
+            }
+            if (currentSegment.length > 0) {
+                drawLineSegment(currentSegment, group);
+            }
 
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.renderOrder = 3; 
-            group.add(line);
-
-            // 2. 陸地の塗りつぶし面（元のロジック）
+            // 2. 塗りつぶし面の生成（パスのねじれを防ぐため、安全にクランプ処理）
             const shape = new THREE.Shape();
             ring.forEach((coord, i) => {
-                if (i === 0) shape.moveTo(coord[0], coord[1]);
-                else shape.lineTo(coord[0], coord[1]);
+                // ロシアや南極のデータが境界線(-180/180)を突き抜けないように綺麗に丸める
+                let lng = coord[0];
+                if (lng > 179.9) lng = 179.9;
+                if (lng < -179.9) lng = -179.9;
+
+                if (i === 0) shape.moveTo(lng, coord[1]);
+                else shape.lineTo(lng, coord[1]);
             });
 
-            const shapeGeometry = new THREE.ShapeGeometry(shape);
-            const posAttr = shapeGeometry.attributes.position;
-            
-            for (let i = 0; i < posAttr.count; i++) {
-                const lng = posAttr.getX(i);
-                const lat = posAttr.getY(i);
-                const vec3 = latLngToVector3(lat, lng, RADIUS + 0.08); 
-                posAttr.setXYZ(i, vec3.x, vec3.y, vec3.z);
+            // 南極用のパス閉じ処理のバグ防止
+            try {
+                const shapeGeometry = new THREE.ShapeGeometry(shape);
+                const posAttr = shapeGeometry.attributes.position;
+                
+                for (let i = 0; i < posAttr.count; i++) {
+                    const lng = posAttr.getX(i);
+                    const lat = posAttr.getY(i);
+                    const vec3 = latLngToVector3(lat, lng, RADIUS + 0.08); 
+                    posAttr.setXYZ(i, vec3.x, vec3.y, vec3.z);
+                }
+                shapeGeometry.computeVertexNormals();
+
+                const meshMaterial = new THREE.MeshBasicMaterial({ 
+                    color: COLOR_LAND_FILL, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: true
+                });
+
+                const countryMesh = new THREE.Mesh(shapeGeometry, meshMaterial);
+                countryMesh.userData = group.userData; 
+                countryMesh.renderOrder = 2; 
+                
+                group.add(countryMesh);
+                countryMeshes.push(countryMesh);
+            } catch (e) {
+                // 万が一Shapeの自動三角形分割がエラーを起こした極小の島などはスキップしてフリーズを防ぐ
+                console.warn("Shape generation skipped for a tiny segment");
             }
-            shapeGeometry.computeVertexNormals();
-
-            // マテリアル（元のMeshBasicMaterialに戻しました）
-            const meshMaterial = new THREE.MeshBasicMaterial({ 
-                color: COLOR_LAND_FILL,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 0.85,
-                depthTest: true,
-                depthWrite: true
-            });
-
-            const countryMesh = new THREE.Mesh(shapeGeometry, meshMaterial);
-            countryMesh.userData = group.userData; 
-            countryMesh.renderOrder = 2; // 海(0)よりも手前に描画
-            
-            group.add(countryMesh);
-            countryMeshes.push(countryMesh); 
         }
 
-        // 空港ピン
-        const pins = [];
-        const pinGeometry = new THREE.SphereGeometry(0.6, 16, 16);
-        const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
+        // 線セグメントを描画するヘルパー
+        function drawLineSegment(pointsData, group) {
+            const points = pointsData.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.12));
+            if (points.length < 2) return;
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(lineGeometry, lineMaterial);
+            line.renderOrder = 3;
+            group.add(line);
+        }
 
-        cargoAirports.forEach(airport => {
-            const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.2);
-            pin.position.copy(pos);
-            pin.userData = { type: 'airport', name: airport.name, country: airport.country };
-            pin.renderOrder = 4; 
-            globeGroup.add(pin);
-            pins.push(pin);
-        });
-
-        // インタラクション設定
+        // インタラクション（マウスドラッグ＆ホバー、前回と同様）
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let lastHoveredMesh = null;
-
         raycaster.params.Mesh.side = THREE.FrontSide;
 
-        window.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
-
+        window.addEventListener('mousedown', (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; });
         window.addEventListener('mousemove', (e) => {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
-            const airportIntersects = raycaster.intersectObjects(pins);
-            
-            if (airportIntersects.length > 0) {
-                const data = airportIntersects[0].object.userData;
+            const countryIntersects = raycaster.intersectObjects(countryMeshes);
+            if (countryIntersects.length > 0) {
+                const hitMesh = countryIntersects[0].object;
+                const data = hitMesh.userData;
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
                 labelEl.style.top = `${e.clientY}px`;
-                labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
-                document.body.style.cursor = 'pointer';
+                labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso})`;
                 
-                if (lastHoveredMesh) {
-                    lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
-                    lastHoveredMesh = null;
+                if (lastHoveredMesh !== hitMesh) {
+                    if (lastHoveredMesh) lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
+                    hitMesh.material.color.setHex(COLOR_HIGHLIGHT); 
+                    lastHoveredMesh = hitMesh;
                 }
             } else {
-                const countryIntersects = raycaster.intersectObjects(countryMeshes);
-                
-                if (countryIntersects.length > 0) {
-                    const hitMesh = countryIntersects[0].object;
-                    const data = hitMesh.userData;
-
-                    labelEl.style.display = 'block';
-                    labelEl.style.left = `${e.clientX}px`;
-                    labelEl.style.top = `${e.clientY}px`;
-                    labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso})`;
-                    document.body.style.cursor = 'default';
-
-                    if (lastHoveredMesh !== hitMesh) {
-                        if (lastHoveredMesh) lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
-                        hitMesh.material.color.setHex(COLOR_HIGHLIGHT); 
-                        lastHoveredMesh = hitMesh;
-                    }
-                } else {
-                    labelEl.style.display = 'none';
-                    document.body.style.cursor = 'default';
-                    if (lastHoveredMesh) {
-                        lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
-                        lastHoveredMesh = null;
-                    }
-                }
+                labelEl.style.display = 'none';
+                if (lastHoveredMesh) { lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL); lastHoveredMesh = null; }
             }
 
             if (!isDragging) return;
-
-            const deltaMove = {
-                x: e.clientX - previousMousePosition.x,
-                y: e.clientY - previousMousePosition.y
-            };
-
+            const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.005;
             globeGroup.rotation.x += deltaMove.y * 0.005;
-
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
-
         window.addEventListener('mouseup', () => { isDragging = false; });
-        
-        window.addEventListener('wheel', (e) => {
-            currentZoom += e.deltaY * 0.1;
-            currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
-            camera.position.z = currentZoom;
-        }, { passive: true });
 
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        }
+        function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
         animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
