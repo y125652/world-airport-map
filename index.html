@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Globe - Perfect Alignment & 4K Canvas Texture</title>
+    <title>3D Globe - High Definition & Perfect Alignment</title>
     <style>
         body {
             margin: 0;
@@ -109,7 +109,7 @@
             { name: "ザベンテム空港 (BRU)", country: "ベルギー", lat: 50.9014, lng: 4.4844 },
             { name: "ルクセンブルク・フィンデル空港 (LUX)", country: "ルクセンブルク", lat: 49.6233, lng: 6.2044 },
             { name: "チューリッヒ空港 (ZRH)", country: "スイス", lat: 47.4582, lng: 8.5481 },
-            { name: "イスタンブール空港 (IST)", country: "トルコ", lat: 41.2753, lng: 28.7519 },
+            { name: "イスタンブール空港 (IST)", polo: "トルコ", lat: 41.2753, lng: 28.7519 },
             { name: "ドバイ国際空港 (DXB)", country: "アラブ首長国連邦", lat: 25.2532, lng: 55.3657 },
             { name: "アール・マクトゥーム国際空港 (DWC)", country: "アラブ首長国連邦", lat: 24.8961, lng: 55.1614 },
             { name: "カタール・ハマド国際空港 (DOH)", country: "カタール", lat: 25.2611, lng: 51.5651 },
@@ -125,16 +125,15 @@
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7017, lng: -74.1469 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホル豪・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "フアン・サンタマリア国際空港 (SJO)", country: "コスタリカ", lat: 9.9939, lng: -84.2089 },
             { name: "マリスカル・スクレ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 緯度経度を3D座標に変換【★反時計回りと基準点ズレの全問題を解消した完全数式】
+        // 緯度経度を3D座標に変換（同期修正版）
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            // 「-lng」で鏡像反転を修正、「-90」でCanvas地図の基準(イギリス)に完全に同期
             const theta = (-lng - 90) * (Math.PI / 180);
             
             const x = -(radius * Math.sin(phi) * Math.sin(theta));
@@ -150,21 +149,26 @@
         const ctx = canvas.getContext('2d');
 
         const texture = new THREE.CanvasTexture(canvas);
+        
+        // 【★画質向上：異方性フィルタリング（Anisotropy）を有効化】
+        // 斜めから見た時やズームアウト時の国境線のボヤけを極限まで抑えます
+        const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+        texture.anisotropy = maxAnisotropy;
+
         const sphereGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
         const globeMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
         globeGroup.add(globeMesh);
 
         // カラーパレット設定
-        const COLOR_SEA = "#1a237e";       // 海: ディープネイビー
-        const COLOR_LAND = "#ffffff";      // 陸地: 白
-        const COLOR_BORDER = "#d1d5db";    // 国境線: ライトグレー
-        const COLOR_HIGHLIGHT = "#00e6ff"; // ホバー面: ネオンブルー
+        const COLOR_SEA = "#1a237e";       
+        const COLOR_LAND = "#ffffff";      
+        const COLOR_BORDER = "#d1d5db";    
+        const COLOR_HIGHLIGHT = "#00e6ff"; 
 
         let geoJsonData = null;
         let hoveredCountryIndex = null;
 
-        // 経度緯度をCanvasのXY座標に正確に配置する関数
         function geoToCanvas(lng, lat) {
             const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
@@ -183,7 +187,7 @@
                 
                 ctx.fillStyle = isHovered ? COLOR_HIGHLIGHT : COLOR_LAND;
                 ctx.strokeStyle = COLOR_BORDER;
-                ctx.lineWidth = 2.0; // 4K用に少し太めに設定
+                ctx.lineWidth = 1.5; // 50mの高精細データに合わせて線の太さを最適に調整
 
                 const type = feature.geometry.type;
                 const coordinates = feature.geometry.coordinates;
@@ -211,22 +215,22 @@
             ctx.stroke();
         }
 
-        // GeoJSONデータの取得
-        fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
+        // 【★画質向上：GeoJSONデータを粗い「110m」から中解像度の「50m」に変更】
+        // これにより海岸線や国境線の形状データそのものが劇的に細かくなります
+        fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
                 geoJsonData = geoJson;
                 drawMap();
             });
 
-        // 貨物空港ピン（赤色の球体）の生成
+        // 貨物空港ピンの生成
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            // 修正された正確な3D空間座標にマッピング
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.4);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
@@ -250,7 +254,6 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
-            // 1. 空港ピンのホバー判定
             const airportIntersects = raycaster.intersectObjects(pins);
             
             if (airportIntersects.length > 0) {
@@ -266,13 +269,11 @@
                     drawMap();
                 }
             } else {
-                // 2. 地球（面）のホバー判定
                 const globeIntersects = raycaster.intersectObject(globeMesh);
                 
                 if (globeIntersects.length > 0 && geoJsonData) {
                     const uv = globeIntersects[0].uv;
                     
-                    // Canvasテクスチャの仕様に合わせた、正しい逆マッピング数式
                     const lng = uv.x * 360 - 180;
                     const lat = uv.y * 180 - 90;
 
@@ -330,7 +331,6 @@
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
-        // 多角形の内包判定（数学的レイキャスティングアルゴリズム）
         function isPointInFeature(lng, lat, feature) {
             const type = feature.geometry.type;
             const coords = feature.geometry.coordinates;
