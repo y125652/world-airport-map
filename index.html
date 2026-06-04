@@ -131,25 +131,24 @@
             { name: "マリスカル・スクレ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 緯度経度を3D空間のVector3座標にマッピングする関数【★テクスチャの基準に完全一致するよう修正】
+        // 緯度経度を3D座標に変換【★反時計回りと基準点ズレの全問題を解消した完全数式】
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            // 球体のテクスチャ展開スタート地点（正面）のズレを相殺するための+90度調整
-            const theta = (lng + 90) * (Math.PI / 180);
+            // 「-lng」で鏡像反転を修正、「-90」でCanvas地図の基準(イギリス)に完全に同期
+            const theta = (-lng - 90) * (Math.PI / 180);
             
-            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
-            const z = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.sin(phi) * Math.cos(theta);
             return new THREE.Vector3(x, y, z);
         }
 
-        // --- メモリ上のHTML5 Canvasで地図テクスチャを作成【★4K超高解像度化：ボヤけ解消】 ---
+        // --- 4K高解像度 Canvasテクスチャ生成 ---
         const canvas = document.createElement('canvas');
         canvas.width = 4096;  
         canvas.height = 2048;
         const ctx = canvas.getContext('2d');
 
-        // Canvasをテクスチャとして読み込み、球体メッシュを生成
         const texture = new THREE.CanvasTexture(canvas);
         const sphereGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const sphereMaterial = new THREE.MeshBasicMaterial({ map: texture });
@@ -158,36 +157,33 @@
 
         // カラーパレット設定
         const COLOR_SEA = "#1a237e";       // 海: ディープネイビー
-        const COLOR_LAND = "#ffffff";      // 通常の陸地: 白
-        const COLOR_BORDER = "#d1d5db";    // 国境線: 明るいライトグレー
-        const COLOR_HIGHLIGHT = "#00e6ff"; // ホバーした面: 鮮やかなネオンブルー
+        const COLOR_LAND = "#ffffff";      // 陸地: 白
+        const COLOR_BORDER = "#d1d5db";    // 国境線: ライトグレー
+        const COLOR_HIGHLIGHT = "#00e6ff"; // ホバー面: ネオンブルー
 
         let geoJsonData = null;
-        let hoveredCountryIndex = null; // 現在ホバーされている国の配列インデックス
+        let hoveredCountryIndex = null;
 
-        // 経度緯度を2Dキャンバス上のXYピクセル座標にマッピングする
+        // 経度緯度をCanvasのXY座標に正確に配置する関数
         function geoToCanvas(lng, lat) {
             const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
             return { x, y };
         }
 
-        // 地図を更新・再描画するメイン処理
+        // 地図の描画処理
         function drawMap() {
             if (!geoJsonData) return;
 
-            // 1. 海の背景を塗りつぶし
             ctx.fillStyle = COLOR_SEA;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. すべての国の「面」と「国境線」をCanvas上に高精細に描画
             geoJsonData.features.forEach((feature, index) => {
                 const isHovered = (index === hoveredCountryIndex);
                 
                 ctx.fillStyle = isHovered ? COLOR_HIGHLIGHT : COLOR_LAND;
                 ctx.strokeStyle = COLOR_BORDER;
-                // 4K高解像度に合わせて線の太さを最適化
-                ctx.lineWidth = 2.0;
+                ctx.lineWidth = 2.0; // 4K用に少し太めに設定
 
                 const type = feature.geometry.type;
                 const coordinates = feature.geometry.coordinates;
@@ -199,11 +195,9 @@
                 }
             });
 
-            // Three.js側に更新を通知
             texture.needsUpdate = true;
         }
 
-        // 多角形（穴あき対応）を描画する補助関数
         function drawPolygon(polygon) {
             ctx.beginPath();
             polygon.forEach((ring) => {
@@ -222,17 +216,17 @@
             .then(res => res.json())
             .then(geoJson => {
                 geoJsonData = geoJson;
-                drawMap(); // 初回描画
+                drawMap();
             });
 
-        // 貨物空港ピン（赤色の3D球体）の生成
+        // 貨物空港ピン（赤色の球体）の生成
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            // ズレが解消された新しい数式に基づいて正しい位置にマッピング
+            // 修正された正確な3D空間座標にマッピング
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.4);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
@@ -240,7 +234,7 @@
             pins.push(pin);
         });
 
-        // マウスインタラクション変数
+        // マウスインタラクション設定
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
@@ -256,7 +250,7 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
-            // 1. まず空港ピンのホバーを優先判定
+            // 1. 空港ピンのホバー判定
             const airportIntersects = raycaster.intersectObjects(pins);
             
             if (airportIntersects.length > 0) {
@@ -272,13 +266,13 @@
                     drawMap();
                 }
             } else {
-                // 2. 地球儀（球体メッシュ）のホバーを判定
+                // 2. 地球（面）のホバー判定
                 const globeIntersects = raycaster.intersectObject(globeMesh);
                 
                 if (globeIntersects.length > 0 && geoJsonData) {
                     const uv = globeIntersects[0].uv;
                     
-                    // 4K解像度テクスチャの巻き方に合わせた、正確な経度・緯度の逆算式
+                    // Canvasテクスチャの仕様に合わせた、正しい逆マッピング数式
                     const lng = uv.x * 360 - 180;
                     const lat = uv.y * 180 - 90;
 
@@ -336,7 +330,7 @@
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
-        // 点の内包判定（数学的アルゴリズム）
+        // 多角形の内包判定（数学的レイキャスティングアルゴリズム）
         function isPointInFeature(lng, lat, feature) {
             const type = feature.geometry.type;
             const coords = feature.geometry.coordinates;
