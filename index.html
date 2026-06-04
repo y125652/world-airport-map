@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Perfect Face Normals Fix</title>
+    <title>3D Vector Globe - Sub-surface Penetration Fix</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #0b0f19; /* 宇宙の背景をより引き締まったダークカラーに */
+            background-color: #0b0f19;
             font-family: Arial, sans-serif;
             user-select: none;
         }
@@ -44,7 +44,7 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
-        // シーン・カメラ・レンダラーの設定
+        // シーン・カメラ・レンダラーの設定（元のライト不要な構成に戻しました）
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -57,10 +57,6 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x000000, 0); 
         container.appendChild(renderer.domElement);
-
-        // ライティング（面の向きが正しくなったため、ライトが綺麗に当たるようになります）
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-        scene.add(ambientLight);
 
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
@@ -90,22 +86,23 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        // --- ベース球体（透明な海） ---
+        // --- ベース球体（透明な海）の修正 ---
         const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const baseMaterial = new THREE.MeshBasicMaterial({ 
             color: 0x1a237e, 
             transparent: true,
-            opacity: 0.25, // 透き通る斬新な海のスタイル
-            side: THREE.DoubleSide
+            opacity: 0.25, 
+            side: THREE.DoubleSide,
+            depthWrite: false // ★【超重要】陸地ポリゴンがどれだけ地球内部に沈み込んでも海で遮らないように設定
         });
         const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
-        baseGlobe.renderOrder = 0; 
+        baseGlobe.renderOrder = 0; // ★【超重要】海を最も背面のレイヤーに置く
         globeGroup.add(baseGlobe);
 
-        // カラーテーマ
-        const COLOR_BORDER = 0xffffff;     // 国境線：シャープな白
-        const COLOR_LAND_FILL = 0x22316c;  // 陸地通常時：落ち着いたサイバーネイビー
-        const COLOR_HIGHLIGHT = 0x00e6ff;  // ホバー時：ネオンライトブルー
+        // カラーテーマ（元のネオンサイバースタイル）
+        const COLOR_BORDER = 0xffffff;     
+        const COLOR_LAND_FILL = 0x22316c;  
+        const COLOR_HIGHLIGHT = 0x00e6ff;  
 
         const lineMaterial = new THREE.LineBasicMaterial({ 
             color: COLOR_BORDER,
@@ -141,7 +138,7 @@
             const ring = polygon[0];
             const points = [];
 
-            // 1. 国境線（3D Line）
+            // 1. 国境線（元のロジック）
             ring.forEach(coord => {
                 const vec = latLngToVector3(coord[1], coord[0], RADIUS + 0.12);
                 points.push(vec);
@@ -152,7 +149,7 @@
             line.renderOrder = 3; 
             group.add(line);
 
-            // 2. 陸地の塗りつぶし面（ShapeGeometry）
+            // 2. 陸地の塗りつぶし面（元のロジック）
             const shape = new THREE.Shape();
             ring.forEach((coord, i) => {
                 if (i === 0) shape.moveTo(coord[0], coord[1]);
@@ -162,7 +159,6 @@
             const shapeGeometry = new THREE.ShapeGeometry(shape);
             const posAttr = shapeGeometry.attributes.position;
             
-            // 2D座標を完璧な3D球面座標（海より0.08だけ上）へと再配置
             for (let i = 0; i < posAttr.count; i++) {
                 const lng = posAttr.getX(i);
                 const lat = posAttr.getY(i);
@@ -171,21 +167,8 @@
             }
             shapeGeometry.computeVertexNormals();
 
-            // 【★超重要：法線ベクトルのねじれを100%外向きに強制上書き補正】
-            const normals = shapeGeometry.attributes.normal;
-            const positions = shapeGeometry.attributes.position;
-            for (let i = 0; i < normals.count; i++) {
-                const vx = positions.getX(i);
-                const vy = positions.getY(i);
-                const vz = positions.getZ(i);
-                // 中心から頂点へ向かうベクトル＝完璧な外向きの法線
-                const dir = new THREE.Vector3(vx, vy, vz).normalize();
-                normals.setXYZ(i, dir.x, dir.y, dir.z);
-            }
-            shapeGeometry.attributes.normal.needsUpdate = true;
-
-            // マテリアル（MeshLambertMaterialにすることで正しい向きの面に綺麗に光が当たります）
-            const meshMaterial = new THREE.MeshLambertMaterial({ 
+            // マテリアル（元のMeshBasicMaterialに戻しました）
+            const meshMaterial = new THREE.MeshBasicMaterial({ 
                 color: COLOR_LAND_FILL,
                 side: THREE.DoubleSide,
                 transparent: true,
@@ -196,7 +179,7 @@
 
             const countryMesh = new THREE.Mesh(shapeGeometry, meshMaterial);
             countryMesh.userData = group.userData; 
-            countryMesh.renderOrder = 2; // 海(0)よりも確実に手前に描画
+            countryMesh.renderOrder = 2; // 海(0)よりも手前に描画
             
             group.add(countryMesh);
             countryMeshes.push(countryMesh); 
@@ -224,7 +207,6 @@
         const mouse = new THREE.Vector2();
         let lastHoveredMesh = null;
 
-        // カメラに向いているオモテ面だけをレイキャストのターゲットにする（裏側の誤反応をシャットアウト）
         raycaster.params.Mesh.side = THREE.FrontSide;
 
         window.addEventListener('mousedown', (e) => {
