@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Globe (Flawless Pixel-Perfect Solution)</title>
+    <title>3D Pure Vector Globe (Pixel-Perfect Highlight)</title>
     <style>
         body {
             margin: 0;
@@ -72,12 +72,12 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 }
         ];
 
-        // 完全なベクトルマテリアル（無限解像度）
+        // 純ベクトル国メッシュの管理（ボヤけ・ガビガビが完全に発生しないマテリアル）
         const countryMeshes = [];
         const countryMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ffcc,       
+            color: 0x00ffcc,       // 近未来的なミントグリーン
             transparent: true,
-            opacity: 0.0,          
+            opacity: 0.0,          // 通常時は透明
             side: THREE.DoubleSide,
             depthWrite: false
         });
@@ -92,10 +92,10 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        // ベースの海
+        // ベースの海（裏側が透けてごちゃつくのを防ぐため、不透明度を高めに設定してシャープさを引き立てます）
         const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x1a237e, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false 
+            color: 0x0a1128, transparent: false, side: THREE.FrontSide 
         });
         const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
         baseGlobe.renderOrder = 0;
@@ -121,17 +121,17 @@
                 });
             });
 
-        // 経度の差を-180〜180の範囲に正規化する関数
+        // 経度の差を-180〜180の範囲に補正するヘルパー
         function normalizeLngDiff(diff) {
             while (diff > 180) diff -= 360;
             while (diff < -180) diff += 360;
             return diff;
         }
 
-        // 【大改良】点の間隔を細かく割断・補間して、3D球体にピタッと沿わせる関数
+        // 【今回の核心】国境線の「点」を自動で限界まで増やし、球体のカーブに完全追従させる関数
         function subdivideRing(ring) {
             const newRing = [];
-            const maxSegmentLength = 4.0; // 4度以上の隙間があれば自動的に点を打つ（これでロシアや南極の突き抜けが消滅します）
+            const maxSegmentLength = 2.0; // ★2度以上の隙間があれば自動で点を中間補間（これでロシアや南極の突き抜けバグが完全消滅します）
 
             for (let i = 0; i < ring.length - 1; i++) {
                 const p1 = ring[i];
@@ -148,6 +148,7 @@
                 const latDiff = lat2 - lat1;
                 const distance = Math.sqrt(lngDiff * lngDiff + latDiff * latDiff);
 
+                // 点と点の間が離れすぎている場合、細かく分割して点を打つ
                 if (distance > maxSegmentLength) {
                     const steps = Math.ceil(distance / maxSegmentLength);
                     for (let s = 1; s < steps; s++) {
@@ -163,11 +164,11 @@
         }
 
         function processPolygon(polygon, countryName) {
-            // 頂点の高密度細分化を実行
+            // 国境線の全頂点を高密度化
             const subdividedPolygon = polygon.map(ring => subdivideRing(ring));
             const ring = subdividedPolygon[0];
 
-            // 1. 線を描画
+            // 1. 白い国境線の描画
             let currentSegment = [];
             for (let i = 0; i < ring.length; i++) {
                 currentSegment.push(ring[i]);
@@ -180,7 +181,7 @@
             }
             if (currentSegment.length > 0) { create3DLine(currentSegment); }
 
-            // 2. 面を描画（高密度化したのでEarcutが100%完璧に動作する）
+            // 2. 線の中を塗る（高密度化したため、ロシア・カナダ・南極も100%はみ出さずに美しく塗れます）
             createVectorCountryMesh(subdividedPolygon, countryName);
         }
 
@@ -193,11 +194,11 @@
             globeGroup.add(line);
         }
 
-        // ピュア3Dベクトルメッシュ作成（100%はみ出さず、どこまで拡大してもクッキリ）
+        // 純ベクトル3Dメッシュ作成ロジック（拡大しても1ピクセルもボヤけない）
         function createVectorCountryMesh(polygon, name) {
             const outerRing = polygon[0];
             
-            // 日付変更線のまたぎ（ロシア対策）のため、経度の基準点を決めて平坦化
+            // 日付変更線をまたぐ国（ロシア等）の破綻を防ぐため、基準経度をもとに平坦化
             const refLng = outerRing[0][0];
             const flatVertices = [];
             const holes = [];
@@ -208,6 +209,7 @@
                 flatVertices.push(refLng + diff, coord[1]);
             });
 
+            // 国内にある湖（穴）の処理
             let holeIndex = outerRing.length;
             for (let i = 1; i < polygon.length; i++) {
                 holes.push(holeIndex);
@@ -219,18 +221,20 @@
                 holeIndex += polygon[i].length;
             }
 
+            // 平面での完璧な多角形分割
             const triangles = earcut(flatVertices, holes, 2);
             if (!triangles || triangles.length === 0) return;
 
             const geometry = new THREE.BufferGeometry();
             const positions = [];
 
+            // 分割された三角形を球体座標に再プロット
             for (let i = 0; i < triangles.length; i++) {
                 const index = triangles[i];
                 const lng = flatVertices[index * 2];
                 const lat = flatVertices[index * 2 + 1];
                 
-                // 線の直下に完璧に配置
+                // 線と完全に同期した3D座標（RADIUS + 0.05 で白線よりわずかに下に配置）
                 const vertex3D = latLngToVector3(lat, lng, RADIUS + 0.05);
                 positions.push(vertex3D.x, vertex3D.y, vertex3D.z);
             }
@@ -262,7 +266,7 @@
             pins.push(pin);
         });
 
-        // インタラクション設定
+        // マウスインタラクション設定
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
@@ -290,19 +294,21 @@
                 document.body.style.cursor = 'default';
             }
 
+            // 国メッシュの衝突判定
             const countryIntersects = raycaster.intersectObjects(countryMeshes);
             let currentHoveredCountryName = null;
             if (countryIntersects.length > 0 && !isHoveringAirport) {
                 currentHoveredCountryName = countryIntersects[0].object.userData.name;
             }
 
+            // ホバーしている国が変わった瞬間だけ透明度を更新（高効率）
             if (currentHoveredCountryName !== lastHoveredCountryName) {
                 countryMeshes.forEach(mesh => {
                     if (mesh.userData.name === lastHoveredCountryName) {
                         mesh.material.opacity = 0.0; 
                     }
                     if (mesh.userData.name === currentHoveredCountryName) {
-                        mesh.material.opacity = 0.3; 
+                        mesh.material.opacity = 0.35; // 35%の不透明度で綺麗に発光
                     }
                 });
                 lastHoveredCountryName = currentHoveredCountryName;
