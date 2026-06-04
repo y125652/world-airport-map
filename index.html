@@ -71,22 +71,21 @@
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeGroup.add(globeMesh);
 
-        // 【数式確定①】2D Canvas上の世界地図描画ルール（左端が西経180度、右端が東経180度）
+        // geoToCanvas（見た目）は標準マッピングのまま維持
         function geoToCanvas(lat, lng) {
             const x = ((lng + 180) / 360) * canvas.width;
             const y = ((90 - lat) / 180) * canvas.height;
             return { x, y };
         }
 
-        // 【数式確定②】Three.jsの球体UVマッピングに完全に合致させた、本来の地球の3D配置ロジック
+        // latLngToVector3（ピン）をThree.jsの標準球体UVマッピングに完全一本化する新数式
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
-            const theta = lng * (Math.PI / 180); 
+            const theta = (lng + 90) * (Math.PI / 180); // 原点位相を+90度補正して同期
 
-            // Three.jsのデフォルト仕様（テクスチャの左端がZ軸の真奥からスタートして巻き付く）に完全同期
-            const x = -radius * Math.sin(phi) * Math.sin(theta);
+            const x = -radius * Math.sin(phi) * Math.cos(theta);
             const y = radius * Math.cos(phi);
-            const z = -radius * Math.sin(phi) * Math.cos(theta); // 0度（ロンドン）が正面を向くように設定
+            const z = radius * Math.sin(phi) * Math.sin(theta);
             return new THREE.Vector3(x, y, z);
         }
 
@@ -251,8 +250,8 @@
         }
 
         scene.add(globeGroup);
-        // 初期角度（初期状態でアジア周辺を正面に向ける補正）
-        globeGroup.rotation.y = 2.5; 
+        // 初期角度（アジア正面）
+        globeGroup.rotation.y = 0; 
 
         // 5. マウス操作・ドラッグ・ズーム・ホバー処理
         let isDragging = false;
@@ -286,12 +285,12 @@
                     const hitPoint = globeIntersects[0].point;
                     const localPoint = hitPoint.clone().applyMatrix4(globeGroup.matrixWorld.invert());
                     
-                    // 【数式確定③】3D交点(XYZ)から、左右反転・軸ズレを100%排除して正確にLat/Lng（経緯度）を逆算する新ロジック
+                    // 【確定ルール③】3D空間の交点(XYZ)から、左右反転・軸ズレを100%排除して正確にLat/Lng（経緯度）を逆算する新ロジック
                     const rad = Math.sqrt(localPoint.x * localPoint.x + localPoint.y * localPoint.y + localPoint.z * localPoint.z);
                     const lat = 90 - Math.acos(localPoint.y / rad) * (180 / Math.PI);
                     
-                    // ピン配置数式（latLngToVector3）と一対一で対応させたアークタンジェント逆引
-                    let lng = Math.atan2(-localPoint.x, -localPoint.z) * (180 / Math.PI);
+                    // XとZの抽出位相を確定ルール②の式と逆算反転させて完全合致
+                    let lng = Math.atan2(localPoint.z, -localPoint.x) * (180 / Math.PI) - 90;
                     while (lng > 180) lng -= 360;
                     while (lng < -180) lng += 360;
 
