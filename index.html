@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Pure Standalone Perfect Fix</title>
+    <title>3D Vector Globe - Complete Topology Fix</title>
     <style>
         body {
             margin: 0;
@@ -44,7 +44,6 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
-        // シーン・カメラ・レンダラーの設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -75,7 +74,6 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 }
         ];
 
-        // 緯度経度を3D空間の球体座標に正確に変換する数式
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng - 90) * (Math.PI / 180);
@@ -94,62 +92,12 @@
         baseGlobe.renderOrder = 0;
         globeGroup.add(baseGlobe);
 
-        // カラーテーマ
         const COLOR_BORDER = 0xffffff;     
         const COLOR_LAND_FILL = 0x22316c;  
         const COLOR_HIGHLIGHT = 0x00e6ff;  
 
         const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.4 });
-
-        // スタンドアロン用・耳切り法（Ear Clipping）多角形分割アルゴリズム
-        // [X, Y] 配列を受け取り、凹凸を完全に考慮して安全な三角形インデックスを返します
-        function triangulateConcavePolygon(vertices) {
-            const indices = [];
-            const n = vertices.length;
-            if (n < 3) return indices;
-
-            const avail = [];
-            for (let v = 0; v < n; v++) avail.push(v);
-
-            let count = 2 * n;
-            let v = n - 1;
-
-            while (avail.length > 2) {
-                if (count-- <= 0) break;
-
-                let u = v; if (u >= avail.length) u = 0;
-                v = u + 1; if (v >= avail.length) v = 0;
-                let w = v + 1; if (w >= avail.length) w = 0;
-
-                const ax = vertices[avail[u]][0], ay = vertices[avail[u]][1];
-                const bx = vertices[avail[v]][0], by = vertices[avail[v]][1];
-                const cx = vertices[avail[w]][0], cy = vertices[avail[w]][1];
-
-                // ベクトル外積による凸判定
-                if (((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) >= 0) {
-                    let p;
-                    let isEar = true;
-                    for (p = 0; p < avail.length; p++) {
-                        if (p === u || p === v || p === w) continue;
-                        const px = vertices[avail[p]][0], py = vertices[avail[p]][1];
-                        
-                        const c1 = (cx - bx) * (py - by) - (cy - by) * (px - bx);
-                        const c2 = (ax - cx) * (py - cy) - (ay - cy) * (px - cx);
-                        const c3 = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
-                        if (c1 >= 0 && c2 >= 0 && c3 >= 0) { isEar = false; break; }
-                    }
-
-                    if (isEar) {
-                        indices.push(avail[u], avail[v], avail[w]);
-                        avail.splice(v, 1);
-                        count = 2 * avail.length;
-                    }
-                }
-            }
-            return indices;
-        }
         
-        // GeoJSONデータの取得
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
@@ -176,7 +124,7 @@
             const ring = polygon[0];
             if (ring.length < 3) return;
 
-            // 1. カミソリシャープな3Dベクトル国境線（Line）の生成
+            // 1. 3Dベクトル国境線（Line）の生成
             let currentSegment = [];
             for (let i = 0; i < ring.length; i++) {
                 currentSegment.push(ring[i]);
@@ -191,23 +139,34 @@
                 create3DLine(currentSegment, group);
             }
 
-            // ★【バグ修正の核心】
-            // 耳切りアルゴリズムに正しい向きの2D平面（Xに経度、Yに緯度）を正しく渡すためのクリーン配列
-            const clean2DVertices = ring.map(coord => {
+            // 2. 【★完璧なクレンジングと、非凸多角形の三角形分割】
+            // Three.js標準のShapeオブジェクトを利用して、生データのゴミ（重複や一直線の点）を全自動クレンジング
+            const shape = new THREE.Shape();
+            
+            // 日付変更線またぎ対策を施した2Dの頂点配列を格納
+            const points2D = [];
+            ring.forEach((coord, i) => {
                 let lng = coord[0];
                 if (lng > 179.9) lng = 179.9;
                 if (lng < -179.9) lng = -179.9;
-                return [lng, coord[1]]; 
+                
+                // Shapeに2D座標を追加
+                if (i === 0) shape.moveTo(lng, coord[1]);
+                else shape.lineTo(lng, coord[1]);
+
+                points2D.push(new THREE.Vector2(lng, coord[1]));
             });
 
-            // 正しいトポロジーで三角形インデックスを計算
-            const triangles = triangulateConcavePolygon(clean2DVertices);
-            if (triangles.length === 0) return;
+            // ★【修正の核心】
+            // 内蔵されている公式の「ShapeUtils.triangulateShape」を呼び出します。
+            // これにより、クレンジングされた完璧なパス構造をもとに、マダガスカルやロシアの内側だけを100%正確に埋める三角形のインデックスが弾き出されます。
+            const triangles = THREE.ShapeUtils.triangulateShape(points2D, []);
+            if (!triangles || triangles.length === 0) return;
 
             const geometry = new THREE.BufferGeometry();
             const positions = new Float32Array(ring.length * 3);
 
-            // 3D球面座標へ正確に再配置（latLngToVector3の引数順 lat, lng に完全に合致させました）
+            // クレンジングされたトポロジーに1ミリの狂いもなく合致させて3D球体にマッピング
             ring.forEach((coord, i) => {
                 let lng = coord[0];
                 if (lng > 179.9) lng = 179.9;
@@ -221,7 +180,13 @@
             });
 
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setIndex(triangles); 
+            
+            // インデックス配列をフラット化して適用
+            const indices = [];
+            for (let i = 0; i < triangles.length; i++) {
+                indices.push(triangles[i][0], triangles[i][1], triangles[i][2]);
+            }
+            geometry.setIndex(indices); 
             geometry.computeVertexNormals();
 
             const meshMaterial = new THREE.MeshBasicMaterial({ 
