@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Globe with Face-Triggered Border Highlights</title>
+    <title>3D Globe with Perfect Face Highlights</title>
     <style>
         body {
             margin: 0;
@@ -32,6 +32,8 @@
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://d3js.org/d3-array.v3.min.js"></script>
+    <script src="https://d3js.org/d3-geo.v3.min.js"></script>
 </head>
 <body>
 
@@ -69,7 +71,6 @@
 
         // 貨物空港データ
         const cargoAirports = [
-            // アジア・オセアニア
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
             { name: "香港国際空港 (HKG)", country: "香港", lat: 22.3080, lng: 113.9185 },
@@ -92,8 +93,6 @@
             { name: "シドニー国際空港 (SYD)", country: "オーストラリア", lat: -33.9461, lng: 151.1772 },
             { name: "メルボルン空港 (MEL)", country: "オーストラリア", lat: -37.6733, lng: 144.8433 },
             { name: "オークランド空港 (AKL)", country: "ニュージーランド", lat: -37.0081, lng: 174.7917 },
-
-            // 北米
             { name: "メンフィス国際空港 (MEM)", country: "アメリカ", lat: 35.0424, lng: -89.9767 },
             { name: "アンカレジ国際空港 (ANC)", country: "アメリカ", lat: 61.1744, lng: -149.9964 },
             { name: "ルイビル・ムハンマド・アリ国際空港 (SDF)", country: "アメリカ", lat: 38.1744, lng: -85.7361 },
@@ -107,8 +106,6 @@
             { name: "バンクーバー国際空港 (YVR)", country: "カナダ", lat: 49.1967, lng: -123.1815 },
             { name: "メキシコ・シティ国際空港 (MEX)", country: "メキシコ", lat: 19.4361, lng: -99.0719 },
             { name: "フェリペ・アンヘレス国際空港 (NLU)", country: "メキシコ", lat: 19.7441, lng: -99.0136 },
-
-            // 欧州・中東・アフリカ
             { name: "フランクフルト空港 (FRA)", country: "ドイツ", lat: 50.0379, lng: 8.5622 },
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 },
             { name: "ロンドン・ヒースロー空港 (LHR)", country: "イギリス", lat: 51.4700, lng: -0.4543 },
@@ -132,8 +129,6 @@
             { name: "O・R・タンボ国際空港 (JNB)", country: "南アフリカ", lat: -26.1367, lng: 28.2460 },
             { name: "ムルタラ・モハンマド国際空港 (LOS)", country: "ナイジェリア", lat: 6.5774, lng: 3.3210 },
             { name: "ボレ国際空港 (ADD)", country: "エチオピア", lat: 8.9779, lng: 38.7993 },
-
-            // 中南米
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "ヴィラコッポス国際空港 (VCP)", country: "ブラジル", lat: -23.0074, lng: -47.1344 },
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
@@ -145,100 +140,84 @@
             { name: "ララ・エレーラ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 緯度経度から3D座標への変換関数
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng + 180) * (Math.PI / 180);
-
             const x = -(radius * Math.sin(phi) * Math.sin(theta));
             const y = radius * Math.cos(phi);
             const z = radius * Math.sin(phi) * Math.cos(theta);
-
             return new THREE.Vector3(x, y, z);
         }
 
-        // ホバー判定用の「透明な面」を管理する配列と、強調表示用カラーの設定
-        const countryMeshes = []; 
-        const defaultLineColor = 0xf5f5f5;   // 通常の国境線：明るいクリーム色
-        const highlightLineColor = 0x00e6ff; // ホバー時：鮮やかなネオンブルー
+        // カラー設定
+        const defaultLineColor = 0xf5f5f5;      // 国境線：明るいクリーム色/グレー
+        const defaultFaceColor = 0xffffff;      // 通常時の陸地：白
+        const highlightFaceColor = 0x00e6ff;    // ホバー時の陸地：鮮やかなネオンブルー
 
-        // GeoJSONデータの読み込みと国パーツの生成
+        const countryMeshes = []; // 判定用の国メッシュを管理する配列
+
+        // GeoJSONデータの取得と描画
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
-                const lineMaterial = new THREE.LineBasicMaterial({ color: defaultLineColor });
                 
-                // 判定用の「完全に透明な面」マテリアル
-                const faceMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xffffff, 
-                    transparent: true, 
-                    opacity: 0.0, // 透明度0で画面上は見えないようにする
+                // 通常時の陸地（面）マテリアル
+                const faceMaterial = new THREE.MeshBasicMaterial({
+                    color: defaultFaceColor,
                     side: THREE.DoubleSide
                 });
 
+                // 通常時の国境線マテリアル
+                const lineMaterial = new THREE.LineBasicMaterial({
+                    color: defaultLineColor
+                });
+
                 geoJson.features.forEach(feature => {
-                    const type = feature.geometry.type;
-                    const coordinates = feature.geometry.coordinates;
                     const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
                     const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
 
+                    // d3.geoBufferGeometry を使って、d3-geoの高度な三角形分割アルゴリズムで3D面を完璧に構築
+                    const geometry = d3.geoBufferGeometry({
+                        type: "Feature",
+                        geometry: feature.geometry
+                    });
+
+                    // 1. 完璧に塗りつぶされた陸地（面）を作成
+                    const mesh = new THREE.Mesh(geometry, faceMaterial.clone());
+                    
+                    // 正しい半径にスケールを調整 (d3-geoはデフォルトで半径1の球体に合わせるため)
+                    mesh.scale.setScalar(RADIUS + 0.05); 
+                    mesh.userData = { type: 'country', name: countryName, iso2: isoA2 };
+                    globeGroup.add(mesh);
+                    countryMeshes.push(mesh);
+
+                    // 2. 国境線（線）を作成して重ねる
+                    const type = feature.geometry.type;
+                    const coordinates = feature.geometry.coordinates;
                     if (type === 'Polygon') {
-                        createCountryElement(coordinates, lineMaterial, faceMaterial, countryName, isoA2);
+                        createCountryLine(coordinates, lineMaterial.clone());
                     } else if (type === 'MultiPolygon') {
                         coordinates.forEach(polygon => {
-                            createCountryElement(polygon, lineMaterial, faceMaterial, countryName, isoA2);
+                            createCountryLine(polygon, lineMaterial.clone());
                         });
                     }
                 });
             });
 
-        // 国境の「線」と、見えない「面」をセットで生成する関数
-        function createCountryElement(polygonCoords, lineMat, faceMat, name, iso2) {
+        // 国境線を作成する補助関数
+        function createCountryLine(polygonCoords, lineMat) {
             const outerCoords = polygonCoords[0];
             const points = [];
-            const shape = new THREE.Shape();
-
-            outerCoords.forEach((coord, index) => {
-                const lng = coord[0];
-                const lat = coord[1];
-                // 描画バグを防ぐため、国境線（Line）を面よりほんの少し外側（RADIUS + 0.15）に配置
-                points.push(latLngToVector3(lat, lng, RADIUS + 0.15));
-
-                if(index === 0) {
-                    shape.moveTo(lng, lat);
-                } else {
-                    shape.lineTo(lng, lat);
-                }
+            outerCoords.forEach((coord) => {
+                // 線が面に埋まらないよう、ほんの少しだけ外側(RADIUS + 0.1)にする
+                points.push(latLngToVector3(coord[1], coord[0], RADIUS + 0.1));
             });
-
-            // 1. 綺麗に見える「国境線」の生成
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(lineGeometry, lineMat.clone());
+            const line = new THREE.Line(lineGeometry, lineMat);
             globeGroup.add(line);
-
-            // 2. ホバー判定用の「透明な面」の生成
-            try {
-                const shapeGeom = new THREE.ShapeGeometry(shape);
-                const countryMesh = new THREE.Mesh(shapeGeom, faceMat.clone());
-
-                const posAttr = countryMesh.geometry.attributes.position;
-                for (let i = 0; i < posAttr.count; i++) {
-                    const lng = posAttr.getX(i);
-                    const lat = posAttr.getY(i);
-                    const v3 = latLngToVector3(lat, lng, RADIUS + 0.05);
-                    posAttr.setXYZ(i, v3.x, v3.y, v3.z);
-                }
-                countryMesh.geometry.computeVertexNormals();
-                
-                // 【重要】透明な面のデータ内に、相方となる「国境線オブジェクト」への参照を保存
-                countryMesh.userData = { type: 'country_face', name: name, iso2: iso2, linkedLine: line };
-                
-                globeGroup.add(countryMesh);
-                countryMeshes.push(countryMesh); // レイキャスターの判定対象配列に追加
-            } catch(e) {}
         }
 
-        // 空港ピンの生成
+        // 貨物空港ピンの生成
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(1.0, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
@@ -254,12 +233,12 @@
 
         globeGroup.rotation.y = 2.5;
 
-        // マウスインタラクションの設定
+        // マウス操作とホバー判定
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        let lastHoveredLine = null; // 前回光らせた国境線を記憶する変数
+        let lastHoveredMesh = null; // 前回ホバーされた国の面メッシュを記憶
 
         window.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -274,7 +253,7 @@
             const airportIntersects = raycaster.intersectObjects(pins);
             
             if (airportIntersects.length > 0) {
-                // 空港ピンにホバーした時
+                // 空港ピンにホバーしたとき
                 const data = airportIntersects[0].object.userData;
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
@@ -282,19 +261,17 @@
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
                 
-                if (lastHoveredLine) {
-                    lastHoveredLine.material.color.set(defaultLineColor);
-                    lastHoveredLine = null;
+                if (lastHoveredMesh) {
+                    lastHoveredMesh.material.color.set(defaultFaceColor);
+                    lastHoveredMesh = null;
                 }
             } else {
-                // 「透明な面」に対するホバー判定を行う
+                // 国の面に対するホバー判定
                 const countryIntersects = raycaster.intersectObjects(countryMeshes);
                 
                 if (countryIntersects.length > 0) {
-                    // 国の面のどこかにマウスが乗った時
-                    const hitFace = countryIntersects[0].object;
-                    const data = hitFace.userData;
-                    const linkedLine = data.linkedLine; // 紐づいている国境線を取得
+                    const hitMesh = countryIntersects[0].object;
+                    const data = hitMesh.userData;
                     
                     labelEl.style.display = 'block';
                     labelEl.style.left = `${e.clientX}px`;
@@ -302,24 +279,22 @@
                     labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso2})`;
                     document.body.style.cursor = 'default';
 
-                    // 別の国に移動した場合、前の国の国境線を通常色に戻す
-                    if (lastHoveredLine && lastHoveredLine !== linkedLine) {
-                        lastHoveredLine.material.color.set(defaultLineColor);
+                    // 別の国にマウスが移動した場合、前の国の色を戻す
+                    if (lastHoveredMesh && lastHoveredMesh !== hitMesh) {
+                        lastHoveredMesh.material.color.set(defaultFaceColor);
                     }
                     
-                    // 連動する国境線をネオンブルーに強調表示
-                    if (linkedLine) {
-                        linkedLine.material.color.set(highlightLineColor);
-                        lastHoveredLine = linkedLine;
-                    }
+                    // ホバーされた国の「面」を鮮やかな色に変更
+                    hitMesh.material.color.set(highlightFaceColor);
+                    lastHoveredMesh = hitMesh;
                 } else {
-                    // 何もない（海など）場所にマウスがある時
+                    // 海などにマウスがあるとき、ハイライトを消す
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
                     
-                    if (lastHoveredLine) {
-                        lastHoveredLine.material.color.set(defaultLineColor);
-                        lastHoveredLine = null;
+                    if (lastHoveredMesh) {
+                        lastHoveredMesh.material.color.set(defaultFaceColor);
+                        lastHoveredMesh = null;
                     }
                 }
             }
@@ -337,24 +312,19 @@
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
-        window.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
+        window.addEventListener('mouseup', () => { isDragging = false; });
         window.addEventListener('wheel', (e) => {
             currentZoom += e.deltaY * 0.1;
             currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
             camera.position.z = currentZoom;
         }, { passive: true });
 
-        // アニメーションループ
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
         }
         animate();
 
-        // リサイズ対応
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
