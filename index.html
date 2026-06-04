@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Razor Sharp & High Performance</title>
+    <title>3D Vector Globe - Perfect Render & Depth Fix</title>
     <style>
         body {
             margin: 0;
@@ -54,7 +54,6 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        // 背景を透明にしてCSSの背景色（ディープネイビー）を活かす
         renderer.setClearColor(0x000000, 0); 
         container.appendChild(renderer.domElement);
 
@@ -62,7 +61,6 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // 国の3Dメッシュを管理する配列（ホバー判定用）
         const countryMeshes = [];
 
         // 貨物空港データ
@@ -130,13 +128,13 @@
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7017, lng: -74.1469 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホル豪・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "フアン・サンタマリア国際空港 (SJO)", country: "コスタリカ", lat: 9.9939, lng: -84.2089 },
             { name: "マリスカル・スクレ国際空港 (UIO)", country: "エクアドル", lat: -0.1228, lng: -78.3575 }
         ];
 
-        // 経度緯度を3D空間の完璧な球体座標に変換する数式（修正版）
+        // 経度緯度を3D空間の球体座標に変換
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng - 90) * (Math.PI / 180);
@@ -147,25 +145,32 @@
             return new THREE.Vector3(x, y, z);
         }
 
-        // --- 地球の内側（陸地を白っぽく塗るためのベース球体） ---
-        const baseGeometry = new THREE.SphereGeometry(RADIUS - 0.1, 64, 64);
+        // --- ベース球体（海）の設定 ---
+        const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x283593, // 海の色：少し明るめのネイビー
+            color: 0x1a237e, // 海のディープブルー
+            transparent: true,
+            opacity: 0.4,    // スケルトンスタイルを維持
+            side: THREE.DoubleSide
+        });
+        const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
+        // 海の描画順序を一番後ろ(0)に固定
+        baseGlobe.renderOrder = 0; 
+        globeGroup.add(baseGlobe);
+
+        // カラーパレット
+        const COLOR_BORDER = 0xffffff;    // 国境線: クッキリした白
+        const COLOR_LAND_FILL = 0x283593; // 陸地の平時塗りつぶし: 海より少し明るいネイビー
+        const COLOR_HIGHLIGHT = 0x00e6ff; // ホバー時: 鮮やかなネオンブルー
+
+        // 国境線の共通マテリアル
+        const lineMaterial = new THREE.LineBasicMaterial({ 
+            color: COLOR_BORDER,
             transparent: true,
             opacity: 0.6
         });
-        const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
-        globeGroup.add(baseGlobe);
-
-        // カラーパレット設定（3Dベクトル線画用）
-        const COLOR_BORDER = 0xd1d5db;    // 通常の国境線: ライトグレー
-        const COLOR_LAND_FILL = 0xffffff; // 陸地の塗りつぶし: 白
-        const COLOR_HIGHLIGHT = 0x00e6ff; // ホバーした国の色: ネオンブルー
-
-        // マテリアルの共通設定
-        const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER });
         
-        // 【★超軽量・ミニマルな110m GeoJSONを読み込み、3D空間に直接『線』と『面』を生成】
+        // ミニマルGeoJSONデータの読み込みと展開
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
@@ -189,62 +194,62 @@
                 });
             });
 
-        // 緯度経度の配列から、3Dの「線（国境線）」と「面（陸地）」を作る処理
         function processPolygon(polygon, group) {
-            // 外側の輪（国境線）
             const ring = polygon[0];
             const points = [];
-            const shapeCoords = []; // 2D形状受信用（ホバー判定の面を作るため）
 
+            // 1. 国境線（3D Line）用座標
             ring.forEach(coord => {
-                const vec = latLngToVector3(coord[1], coord[0], RADIUS);
+                // 線を海（RADIUS）のほんのわずか外側に配置（Zファイティング防止）
+                const vec = latLngToVector3(coord[1], coord[0], RADIUS + 0.15);
                 points.push(vec);
             });
 
-            // 1. 国境線（3D Line）を生成
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMaterial);
+            line.renderOrder = 2; // 線は最前面に描画
             group.add(line);
 
-            // 2. ホバー判定＆陸地の色塗りのための「3Dポリゴン面」を生成
-            // D3などの外部ライブラリを一切使わず、緩やかな球体に沿った立体面を自作
+            // 2. 塗りつぶしの面（Shape）の生成
             const shape = new THREE.Shape();
             ring.forEach((coord, i) => {
-                // 経度・緯度を一旦簡易的な2D平面にマッピングしてShapeを作る
                 if (i === 0) shape.moveTo(coord[0], coord[1]);
                 else shape.lineTo(coord[0], coord[1]);
             });
 
-            // 平面のShapeを頂点データに変換
             const shapeGeometry = new THREE.ShapeGeometry(shape);
             const posAttr = shapeGeometry.attributes.position;
             
-            // 重要：平面の頂点(X, Y)を、地球の正しい球体3D座標(X, Y, Z)へとすべて全自動置換
+            // 2D平面のShapeの頂点を、完璧な3D球体面（海より0.1だけ外側）へと置換
             for (let i = 0; i < posAttr.count; i++) {
                 const lng = posAttr.getX(i);
                 const lat = posAttr.getY(i);
-                const vec3 = latLngToVector3(lat, lng, RADIUS - 0.05); // 線よりわずかに内側
+                const vec3 = latLngToVector3(lat, lng, RADIUS + 0.05); 
                 posAttr.setXYZ(i, vec3.x, vec3.y, vec3.z);
             }
             shapeGeometry.computeVertexNormals();
 
-            // 陸地のベースマテリアル（白）
+            // 陸地のマテリアル設定（【★ここがバグ修正の肝】）
             const meshMaterial = new THREE.MeshBasicMaterial({ 
                 color: COLOR_LAND_FILL,
                 side: THREE.DoubleSide,
                 transparent: true,
-                opacity: 0.95 // ほぼ不透明のクッキリした白
+                opacity: 0.85,          // 表面でも海を透過させずクッキリ白（青）く塗る
+                depthTest: true,       // 3Dの前後判定は有効にしつつ
+                depthWrite: true
             });
 
             const countryMesh = new THREE.Mesh(shapeGeometry, meshMaterial);
-            // 親グループのuserDataを引き継ぐ
             countryMesh.userData = group.userData; 
             
+            // 【最重要】描画順を海(0)よりも手前(1)に強制設定。これで表面でも絶対に潜り込みません！
+            countryMesh.renderOrder = 1; 
+            
             group.add(countryMesh);
-            countryMeshes.push(countryMesh); // レイキャスター監視対象に追加
+            countryMeshes.push(countryMesh); 
         }
 
-        // 貨物空港ピン（赤色の球体）の生成
+        // 貨物空港ピン（赤色の球体）
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(0.8, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff3366 });
@@ -254,16 +259,20 @@
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.3);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
+            pin.renderOrder = 3; // ピンは全ての要素の最前面に
             globeGroup.add(pin);
             pins.push(pin);
         });
 
-        // マウスインタラクション設定（線画方式に最適化）
+        // マウスコントロールとインタラクション
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let lastHoveredMesh = null;
+
+        // 【★裏側の国が誤反応するのを防ぐため、レイキャスターの表裏判定を厳格化】
+        raycaster.params.Mesh.side = THREE.FrontSide;
 
         window.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -286,17 +295,16 @@
                 labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
                 document.body.style.cursor = 'pointer';
                 
-                // 国のハイライトを解除
                 if (lastHoveredMesh) {
                     lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
                     lastHoveredMesh = null;
                 }
             } else {
-                // 2. 【国（3Dポリゴン面）のホバー判定】
-                // 画像ではなく3D空間のメッシュそのものをミリ秒単位で直撃判定するため、爆速かつ正確です
+                // 2. 国のホバー判定
                 const countryIntersects = raycaster.intersectObjects(countryMeshes);
                 
                 if (countryIntersects.length > 0) {
+                    // カメラから最も近い（手前側にある）交差点のメッシュを取得
                     const hitMesh = countryIntersects[0].object;
                     const data = hitMesh.userData;
 
@@ -306,14 +314,12 @@
                     labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso})`;
                     document.body.style.cursor = 'default';
 
-                    // 違う国に移動した場合のみ色を更新（安定化処理）
                     if (lastHoveredMesh !== hitMesh) {
                         if (lastHoveredMesh) lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
-                        hitMesh.material.color.setHex(COLOR_HIGHLIGHT); // ネオンブルーに点灯
+                        hitMesh.material.color.setHex(COLOR_HIGHLIGHT); // 手前側でネオンブルーに点灯
                         lastHoveredMesh = hitMesh;
                     }
                 } else {
-                    // 何もホバーしていない時
                     labelEl.style.display = 'none';
                     document.body.style.cursor = 'default';
                     if (lastHoveredMesh) {
@@ -330,7 +336,6 @@
                 y: e.clientY - previousMousePosition.y
             };
 
-            // ドラッグによる地球の回転
             globeGroup.rotation.y += deltaMove.x * 0.005;
             globeGroup.rotation.x += deltaMove.y * 0.005;
 
@@ -339,21 +344,18 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
         
-        // ズーム（ホイール）処理
         window.addEventListener('wheel', (e) => {
             currentZoom += e.deltaY * 0.1;
             currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, currentZoom));
             camera.position.z = currentZoom;
         }, { passive: true });
 
-        // ループアニメーション
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
         }
         animate();
 
-        // 画面リサイズ対応
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
