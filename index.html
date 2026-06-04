@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Rollback Version</title>
+    <title>3D Pure Vector Line Globe</title>
     <style>
         body {
             margin: 0;
@@ -44,6 +44,7 @@
         const labelEl = document.getElementById('info-label');
         const RADIUS = 70;
 
+        // シーン・カメラ・レンダラーの設定
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -59,8 +60,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        const countryMeshes = [];
-
+        // 貨物空港データ
         const cargoAirports = [
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
@@ -73,6 +73,7 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 }
         ];
 
+        // 緯度経度を3D空間の球体座標に正確に変換する数式
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
             const theta = (-lng - 90) * (Math.PI / 180);
@@ -82,174 +83,85 @@
             return new THREE.Vector3(x, y, z);
         }
 
+        // ベース球体（透明な海のレイヤー）
         const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const baseMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x1a237e, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false 
+            color: 0x1a237e, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false 
         });
         const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
         baseGlobe.renderOrder = 0;
         globeGroup.add(baseGlobe);
 
+        // 国境線のカラー定義
         const COLOR_BORDER = 0xffffff;     
-        const COLOR_LAND_FILL = 0x22316c;  
-        const COLOR_HIGHLIGHT = 0x00e6ff;  
-
-        const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.4 });
-
-        function triangulateConcavePolygon(vertices) {
-            const indices = [];
-            const n = vertices.length;
-            if (n < 3) return indices;
-
-            const avail = [];
-            for (let v = 0; v < n; v++) avail.push(v);
-
-            let count = 2 * n;
-            let v = n - 1;
-
-            while (avail.length > 2) {
-                if (count-- <= 0) break;
-
-                let u = v; if (u >= avail.length) u = 0;
-                v = u + 1; if (v >= avail.length) v = 0;
-                let w = v + 1; if (w >= avail.length) w = 0;
-
-                const ax = vertices[avail[u]][0], ay = vertices[avail[u]][1];
-                const bx = vertices[avail[v]][0], by = vertices[avail[v]][1];
-                const cx = vertices[avail[w]][0], cy = vertices[avail[w]][1];
-
-                if (((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) >= 0) {
-                    let p;
-                    let isEar = true;
-                    for (p = 0; p < avail.length; p++) {
-                        if (p === u || p === v || p === w) continue;
-                        const px = vertices[avail[p]][0], py = vertices[avail[p]][1];
-                        
-                        const c1 = (cx - bx) * (py - by) - (cy - by) * (px - bx);
-                        const c2 = (ax - cx) * (py - cy) - (ay - cy) * (px - cx);
-                        const c3 = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
-                        if (c1 >= 0 && c2 >= 0 && c3 >= 0) { isEar = false; break; }
-                    }
-
-                    if (isEar) {
-                        indices.push(avail[u], avail[v], avail[w]);
-                        avail.splice(v, 1);
-                        count = 2 * avail.length;
-                    }
-                }
-            }
-            return indices;
-        }
+        const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.45 });
         
+        // GeoJSONデータの取得
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
-                geoJson.features.forEach((feature, countryIndex) => {
-                    const countryGroup = new THREE.Group();
-                    const countryName = feature.properties.NAME_JA || feature.properties.NAME || "Unknown";
-                    const isoA2 = feature.properties.ISO_A2 || feature.properties.iso_a2 || "??";
-                    
-                    countryGroup.userData = { index: countryIndex, name: countryName, iso: isoA2 };
-
+                geoJson.features.forEach((feature) => {
                     const type = feature.geometry.type;
                     const coordinates = feature.geometry.coordinates;
 
                     if (type === 'Polygon') {
-                        processPolygon(coordinates, countryGroup);
+                        processPolygon(coordinates);
                     } else if (type === 'MultiPolygon') {
-                        coordinates.forEach(polygon => processPolygon(polygon, countryGroup));
+                        coordinates.forEach(polygon => processPolygon(polygon));
                     }
-                    globeGroup.add(countryGroup);
                 });
             });
 
-        function processPolygon(polygon, group) {
+        // 多角形データから3Dベクトル線を引く（日付変更線のまたぎも自動カットされます）
+        function processPolygon(polygon) {
             const ring = polygon[0];
-            if (ring.length < 3) return;
+            if (ring.length < 2) return;
 
             let currentSegment = [];
             for (let i = 0; i < ring.length; i++) {
                 currentSegment.push(ring[i]);
                 if (i < ring.length - 1) {
                     if (Math.abs(ring[i][0] - ring[i+1][0]) > 180) {
-                        create3DLine(currentSegment, group);
+                        create3DLine(currentSegment);
                         currentSegment = [];
                     }
                 }
             }
             if (currentSegment.length > 0) {
-                create3DLine(currentSegment, group);
+                create3DLine(currentSegment);
             }
-
-            const clean2DVertices = ring.map(coord => {
-                let lng = coord[0];
-                if (lng > 179.9) lng = 179.9;
-                if (lng < -179.9) lng = -179.9;
-                return [lng, coord[1]];
-            });
-
-            const triangles = triangulateConcavePolygon(clean2DVertices);
-            if (triangles.length === 0) return;
-
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(ring.length * 3);
-
-            ring.forEach((coord, i) => {
-                let lng = coord[0];
-                if (lng > 179.9) lng = 179.9;
-                if (lng < -179.9) lng = -179.9;
-
-                const vec3 = latLngToVector3(coord[1], lng, RADIUS + 0.08); 
-                positions[i * 3] = vec3.x;
-                positions[i * 3 + 1] = vec3.y;
-                positions[i * 3 + 2] = vec3.z;
-            });
-
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setIndex(triangles); 
-            geometry.computeVertexNormals();
-
-            const meshMaterial = new THREE.MeshBasicMaterial({ 
-                color: COLOR_LAND_FILL, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: true
-            });
-
-            const countryMesh = new THREE.Mesh(geometry, meshMaterial);
-            countryMesh.userData = group.userData; 
-            countryMesh.renderOrder = 2; 
-            
-            group.add(countryMesh);
-            countryMeshes.push(countryMesh);
         }
 
-        function create3DLine(pointsData, group) {
-            const points = pointsData.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.12));
+        // 3D空間への線描画処理
+        function create3DLine(pointsData) {
+            const points = pointsData.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.1));
             if (points.length < 2) return;
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             const line = new THREE.Line(lineGeometry, lineMaterial);
-            line.renderOrder = 3;
-            group.add(line);
+            line.renderOrder = 1;
+            globeGroup.add(line);
         }
 
+        // 貨物空港ピン（赤色の球体）の配置
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(0.6, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.25);
+            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.2);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
-            pin.renderOrder = 4; 
+            pin.renderOrder = 2; 
             globeGroup.add(pin);
             pins.push(pin);
         });
 
+        // ドラッグによる地球の回転、および空港ピンのホバー（ラベル表示）のみに絞ったインタラクション
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        let lastHoveredMesh = null;
-        raycaster.params.Mesh.side = THREE.FrontSide;
 
         window.addEventListener('mousedown', (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; });
         window.addEventListener('mousemove', (e) => {
@@ -257,29 +169,25 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
-            const countryIntersects = raycaster.intersectObjects(countryMeshes);
-            if (countryIntersects.length > 0) {
-                const hitMesh = countryIntersects[0].object;
-                const data = hitMesh.userData;
+            // 空港ピンのホバーのみ判定
+            const airportIntersects = raycaster.intersectObjects(pins);
+            
+            if (airportIntersects.length > 0) {
+                const data = airportIntersects[0].object.userData;
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
                 labelEl.style.top = `${e.clientY}px`;
-                labelEl.innerHTML = `<strong>${data.name}</strong> (${data.iso})`;
-                
-                if (lastHoveredMesh !== hitMesh) {
-                    if (lastHoveredMesh) lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL);
-                    hitMesh.material.color.setHex(COLOR_HIGHLIGHT); 
-                    lastHoveredMesh = hitMesh;
-                }
+                labelEl.innerHTML = `<strong>${data.name}</strong><br><small>国: ${data.country}</small>`;
+                document.body.style.cursor = 'pointer';
             } else {
                 labelEl.style.display = 'none';
-                if (lastHoveredMesh) { lastHoveredMesh.material.color.setHex(COLOR_LAND_FILL); lastHoveredMesh = null; }
+                document.body.style.cursor = 'default';
             }
 
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
-            globeGroup.rotation.y += deltaMove.x * 0.005;
-            globeGroup.rotation.x += deltaMove.y * 0.005;
+            globeGroup.rotation.y += deltaMove.x * 0.004;
+            globeGroup.rotation.x += deltaMove.y * 0.004;
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
         window.addEventListener('mouseup', () => { isDragging = false; });
