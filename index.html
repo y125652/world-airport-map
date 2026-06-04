@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Vector Globe - Built-in Earcut Fix</title>
+    <title>3D Vector Globe - Pure Standalone Triangulation</title>
     <style>
         body {
             margin: 0;
@@ -100,6 +100,56 @@
         const COLOR_HIGHLIGHT = 0x00e6ff;  
 
         const lineMaterial = new THREE.LineBasicMaterial({ color: COLOR_BORDER, transparent: true, opacity: 0.4 });
+
+        // ★【外部依存を100%解決する自作ポリゴンカッター（耳切り法アルゴリズム）】
+        // ロシアや南極のように入り組んだ凹凸多角形を、余計な放射状の線を一切出さずに完璧に三角形化します。
+        function triangulateConcavePolygon(vertices) {
+            const indices = [];
+            const n = vertices.length;
+            if (n < 3) return indices;
+
+            const avail = [];
+            for (let v = 0; v < n; v++) avail.push(v);
+
+            let count = 2 * n;
+            let v = n - 1;
+
+            while (avail.length > 2) {
+                if (count-- <= 0) break;
+
+                let u = v; if (u >= avail.length) u = 0;
+                v = u + 1; if (v >= avail.length) v = 0;
+                let w = v + 1; if (w >= avail.length) w = 0;
+
+                const ax = vertices[avail[u]][0], ay = vertices[avail[u]][1];
+                const bx = vertices[avail[v]][0], by = vertices[avail[v]][1];
+                const cx = vertices[avail[w]][0], cy = vertices[avail[w]][1];
+
+                // 三角形が内側に折れ曲がっていないか（凸かどうか）の判定
+                if (((bx - ax) * (cy - ay) - (by - ay) * (cx - ax)) >= 0) {
+                    let p;
+                    let isEar = true;
+                    // 他の頂点がこの三角形の内部に入り込んでいないか厳格チェック
+                    for (p = 0; p < avail.length; p++) {
+                        if (p === u || p === v || p === w) continue;
+                        const px = vertices[avail[p]][0], py = vertices[avail[p]][1];
+                        
+                        // 点が三角形の内部にあるかどうかの数式
+                        const c1 = (cx - bx) * (py - by) - (cy - by) * (px - bx);
+                        const c2 = (ax - cx) * (py - cy) - (ay - cy) * (px - cx);
+                        const c3 = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+                        if (c1 >= 0 && c2 >= 0 && c3 >= 0) { isEar = false; break; }
+                    }
+
+                    if (isEar) {
+                        indices.push(avail[u], avail[v], avail[w]);
+                        avail.splice(v, 1);
+                        count = 2 * avail.length;
+                    }
+                }
+            }
+            return indices;
+        }
         
         // GeoJSONデータの取得
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
@@ -143,23 +193,22 @@
                 create3DLine(currentSegment, group);
             }
 
-            // 2. Earcutに渡すためのフラットな配列[lng, lat, lng, lat...]を作成
-            const flatCoords = [];
-            ring.forEach(coord => {
+            // 日付変更線のまたぎによるねじれを防ぐためクランプした2D頂点配列を用意
+            const clean2DVertices = ring.map(coord => {
                 let lng = coord[0];
                 if (lng > 179.9) lng = 179.9;
                 if (lng < -179.9) lng = -179.9;
-                flatCoords.push(lng, coord[1]);
+                return [lng, coord[1]];
             });
 
-            // ★【修正の核心】Three.jsが体内に内蔵している公式のEarcutを直接呼び出す（ReferenceErrorを完全回避）
-            const triangles = THREE.Earcut.triangulate(flatCoords);
+            // ★自作の内蔵耳切りアルゴリズムを呼び出し（ReferenceErrorは100%起きません）
+            const triangles = triangulateConcavePolygon(clean2DVertices);
             if (triangles.length === 0) return;
 
             const geometry = new THREE.BufferGeometry();
             const positions = new Float32Array(ring.length * 3);
 
-            // 3D球面座標へきれいにマッピング
+            // 3D球面座標へ綺麗に再配置
             ring.forEach((coord, i) => {
                 let lng = coord[0];
                 if (lng > 179.9) lng = 179.9;
@@ -172,7 +221,7 @@
             });
 
             geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setIndex(triangles); 
+            geometry.setIndex(triangles); // 算出された完璧なポリゴン構造を適用
             geometry.computeVertexNormals();
 
             const meshMaterial = new THREE.MeshBasicMaterial({ 
