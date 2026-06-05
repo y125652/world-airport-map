@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Globe (Global International Airports Edition)</title>
+    <title>3D Pure Vector Line Globe</title>
     <style>
         body {
             margin: 0;
@@ -59,7 +59,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // ★世界の主要な国際線ハブ空港データを大幅増強（緯度経度も超精密）
+        // ★国際線ハブ空港データ（大量増強版）
         const cargoAirports = [
             // 日本
             { name: "東京国際空港 / 羽田 (HND)", country: "日本", lat: 35.5494, lng: 139.7798 },
@@ -67,7 +67,7 @@
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
             { name: "中部国際空港 / セントレア (NGO)", country: "日本", lat: 34.8584, lng: 136.8054 },
             
-            // アジア・オセアニア
+            // アジアーオセアニア
             { name: "仁川国際空港 (ICN)", country: "韓国", lat: 37.4602, lng: 126.4407 },
             { name: "台湾桃園国際空港 (TPE)", country: "台湾", lat: 25.0797, lng: 121.2342 },
             { name: "香港国際空港 (HKG)", country: "香港", lat: 22.3080, lng: 113.9185 },
@@ -84,7 +84,7 @@
 
             // 北米
             { name: "ジョン・F・ケネディ国際空港 (JFK)", country: "アメリカ", lat: 40.6398, lng: -73.7781 },
-            { name: "ロサンゼルス国際空港 (LAX)", country: "アメリカ", lat: 33.9416, lng: -118.4085 },
+            { name: "ロ独立ロサンゼルス国際空港 (LAX)", country: "アメリカ", lat: 33.9416, lng: -118.4085 },
             { name: "シカゴ・オヘア国際空港 (ORD)", country: "アメリカ", lat: 41.9742, lng: -87.9073 },
             { name: "サンフランシスコ国際空港 (SFO)", country: "アメリカ", lat: 37.6190, lng: -122.3749 },
             { name: "ハーツフィールド・ジャクソン・アトランタ国際空港 (ATL)", country: "アメリカ", lat: 33.6407, lng: -84.4277 },
@@ -114,21 +114,24 @@
             { name: "メキシコ・シティ国際空港 (MEX)", country: "メキシコ", lat: 19.4363, lng: -99.0721 }
         ];
 
-        // 2D判定用カラーキャンバスの設定
+        // 2D判定用キャンバス
         const pickCanvas = document.createElement('canvas');
         pickCanvas.width = 4096;
         pickCanvas.height = 2048;
         const pCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
         const colorToCountryMap = {};
 
-        // 3Dベース地球
-        const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const globeMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x0a1128, transparent: false, side: THREE.FrontSide 
+        // ★元の美しい「透き通る海のレイヤー」に完全巻き戻し
+        const baseGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
+        const baseMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x1a237e, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false 
         });
-        const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
-        globeMesh.userData = { type: 'globe' };
-        globeMesh.renderOrder = 0;
+        const baseGlobe = new THREE.Mesh(baseGeometry, baseMaterial);
+        baseGlobe.renderOrder = 0;
+        globeGroup.add(baseGlobe);
+
+        // カラーインデックス判定用の見えないダミー球体
+        const globeMesh = new THREE.Mesh(baseGeometry, new THREE.MeshBasicMaterial({ visible: false }));
         globeGroup.add(globeMesh);
 
         function lngLatToCanvas(lng, lat) {
@@ -137,7 +140,7 @@
             return { x, y };
         }
 
-        const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 });
+        const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 });
         const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.0 });
         
         const allCountryLines = []; 
@@ -266,14 +269,14 @@
             allCountryLines.push(highlightLine);
         }
 
-        // 拡張された国際空港ピンを球体に配置
+        // 空港ピンの配置
         const pins = [];
-        const pinGeometry = new THREE.SphereGeometry(0.55, 16, 16); // 量が増えたため、少しスマート（0.55）に調整
+        const pinGeometry = new THREE.SphereGeometry(0.6, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
 
         cargoAirports.forEach(airport => {
             const pin = new THREE.Mesh(pinGeometry, pinMaterial);
-            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.25);
+            const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.2);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
             pin.renderOrder = 3; 
@@ -281,7 +284,7 @@
             pins.push(pin);
         });
 
-        // 操作設定
+        // インタラクション設定
         let isDragging = false;
         let previousMousePosition = { x: 0, y: 0 };
         const raycaster = new THREE.Raycaster();
