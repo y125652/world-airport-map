@@ -59,7 +59,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // ★世界の主要な国際線ハブ空港データを100拠点超に増強（超高精度座標）
+        // 世界の主要な国際線ハブ空港データ（100拠点超）
         const cargoAirports = [
             // 日本 (主要都市・拠点空港)
             { name: "東京国際空港 / 羽田 (HND)", country: "日本", lat: 35.5494, lng: 139.7798 },
@@ -115,12 +115,12 @@
             { name: "ドバイ国際空港 (DXB)", country: "アラブ首長国連邦", lat: 25.2532, lng: 55.3657 },
             { name: "アブダビ国際空港 (AUH)", country: "アラブ首長国連邦", lat: 24.4330, lng: 54.6511 },
             { name: "ハマド国際空港 (DOH)", country: "カタール", lat: 25.2611, lng: 51.5650 },
-            { name: "キング・ブドゥルアズィーズ国際空港 (JED)", country: "サウジアラビア", lat: 21.6796, lng: 39.1565 },
+            { name: "キング・アブドゥルアズィーズ国際空港 (JED)", country: "サウジアラビア", lat: 21.6796, lng: 39.1565 },
             { name: "キング・ハーリド国際空港 (RUH)", country: "サウジアラビア", lat: 24.9576, lng: 46.6988 },
             { name: "マスカット国際空港 (MCT)", country: "オマーン", lat: 23.5933, lng: 58.2844 },
             { name: "ベン・グルオン国際空港 (TLV)", country: "イスラエル", lat: 32.0114, lng: 34.8867 },
 
-            // ヨーロッパ (西欧・東欧・ロシア)
+            // ヨーロッパ
             { name: "ロンドン・ヒースロー空港 (LHR)", country: "イギリス", lat: 51.4700, lng: -0.4543 },
             { name: "ロンドン・ガトウィック空港 (LGW)", country: "イギリス", lat: 51.1481, lng: -0.1903 },
             { name: "ロンドン・スタンステッド空港 (STN)", country: "イギリス", lat: 51.8850, lng: 0.2350 },
@@ -148,7 +148,7 @@
             { name: "シェレメーチエヴォ国際空港 (SVO)", country: "ロシア", lat: 55.9726, lng: 37.4146 },
             { name: "ドモジェドヴォ国際空港 (DME)", country: "ロシア", lat: 55.4088, lng: 37.9063 },
 
-            // 北米 (アメリカ・カナダ)
+            // 北米
             { name: "ジョン・F・ケネディ国際空港 (JFK)", country: "アメリカ", lat: 40.6398, lng: -73.7781 },
             { name: "ニューアーク・リバティー国際空港 (EWR)", country: "アメリカ", lat: 40.6925, lng: -74.1686 },
             { name: "ロサンゼルス国際空港 (LAX)", country: "アメリカ", lat: 33.9416, lng: -118.4085 },
@@ -168,7 +168,7 @@
             { name: "トロント・ピアソン国際空港 (YYZ)", country: "カナダ", lat: 43.6777, lng: -79.6248 },
             { name: "モントリオール・ピエール・エリオット・トルドー国際空港 (YUL)", country: "カナダ", lat: 45.4706, lng: -73.7408 },
 
-            // 中南米・カリブ
+            // 中南米
             { name: "メキシコ・シティ国際空港 (MEX)", country: "メキシコ", lat: 19.4363, lng: -99.0721 },
             { name: "カンクン国際空港 (CUN)", country: "メキシコ", lat: 21.0365, lng: -86.8771 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
@@ -176,7 +176,7 @@
             { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
-            { name: "ミニストロ・ピスタリーニ国際空港 / ブエノスアイレス (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
+            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
 
             // アフリカ
@@ -189,21 +189,18 @@
             { name: "ムルタラ・モハンマド国際空港 (LOS)", country: "ナイジェリア", lat: 6.5774, lng: 3.3210 }
         ];
 
-        // -------------------------------------------------------------
-        // ★打ち手：メモリ上の透明な2D判定用カラーキャンバス（4K超高精度）
-        // -------------------------------------------------------------
+        // 2D判定用カラーキャンバス（メモリ上）
         const pickCanvas = document.createElement('canvas');
         pickCanvas.width = 4096;
         pickCanvas.height = 2048;
         const pCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
 
-        // 色から国名を一瞬で逆引きするための辞書
         const colorToCountryMap = {};
 
-        // マウスの衝突を検知するためだけの、ダミーの3D地球プレーン（透明でOK）
+        // ★海のレイヤーを最初の「透き通った青い海」の設定（透明度20%）に変更
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x0a1128, transparent: false, side: THREE.FrontSide 
+            color: 0x1a237e, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false 
         });
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeMesh.userData = { type: 'globe' };
@@ -216,7 +213,6 @@
             return { x, y };
         }
 
-        // ベクトル線のマテリアル管理
         const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 });
         const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.0 });
         
@@ -238,7 +234,6 @@
             return diff;
         }
 
-        // パス（線）の自動細分化高密度化
         function subdivideRing(ring) {
             const newRing = [];
             const maxSegmentLength = 1.5;
@@ -261,7 +256,6 @@
             return newRing;
         }
 
-        // GeoJSON取得と2Dマップの自動色分けビルド
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
@@ -273,17 +267,15 @@
                     let countryName = feature.properties.NAME_JA || feature.properties.NAME || "不明な国";
                     if(countryName.includes("Antarctica")) countryName = "南極";
 
-                    // 国ごとに絶対に被らないユニークなRGB色を生成 (ID化)
                     const r = (index + 1) & 0xff;
                     const g = ((index + 1) >> 8) & 0xff;
                     const b = ((index + 1) >> 16) & 0xff;
                     const colorKey = `rgb(${r},${g},${b})`;
                     
-                    colorToCountryMap[colorKey] = countryName; // 辞書に登録
+                    colorToCountryMap[colorKey] = countryName;
 
                     pCtx.fillStyle = colorKey;
 
-                    // 1. 透明キャンバス（2D）へ国を完璧に塗りつぶし（絶対に破綻しない）
                     if (type === 'Polygon') {
                         drawCanvasPolygon(coordinates);
                         processLinePolygon(coordinates, countryName);
@@ -296,7 +288,6 @@
                 });
             });
 
-        // 2Dキャンバスに多角形を描画する（穴あきにも完全対応）
         function drawCanvasPolygon(polygon) {
             pCtx.beginPath();
             const outerRing = polygon[0];
@@ -344,7 +335,6 @@
             if (currentSegment.length > 0) { createCountryLines(currentSegment, countryName); }
         }
 
-        // 3Dのシャープな国境線（2連構造）
         function createCountryLines(pointsData, name) {
             const points = pointsData.map(coord => latLngToVector3(coord[1], coord[0], RADIUS + 0.1));
             if (points.length < 2) return;
@@ -363,7 +353,7 @@
             allCountryLines.push(highlightLine);
         }
 
-        // 貨物空港ピン（量が多いため、サイズを0.45に微調整して洗練させました）
+        // 貨物空港ピン（量が多いため、サイズを0.45に微調整してすっきり見せています）
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(0.45, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
@@ -390,7 +380,6 @@
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             
-            // 1. 空港ピンのホバー判定
             const airportIntersects = raycaster.intersectObjects(pins);
             let isHoveringAirport = false;
 
@@ -407,35 +396,31 @@
                 document.body.style.cursor = 'default';
             }
 
-            // 2. ★透明な2Dカラーマップを用いた、完璧な面ホバー判定
             let currentHoveredCountryName = null;
             const globeIntersects = raycaster.intersectObject(globeMesh);
 
             if (globeIntersects.length > 0 && !isHoveringAirport) {
                 const hit = globeIntersects[0];
                 if (hit.uv) {
-                    // 3D上のUV座標から、2Dキャンバスの正確なピクセル位置を計算
                     const x = Math.floor(hit.uv.x * pickCanvas.width);
-                    const y = Math.floor((1.0 - hit.uv.y) * pickCanvas.height); // 上下反転の補正
+                    const y = Math.floor((1.0 - hit.uv.y) * pickCanvas.height);
 
-                    // マウス真下の1ピクセルのRGBA色を取得
                     const pixel = pCtx.getImageData(x, y, 1, 1).data;
                     
-                    if (pixel[3] > 0) { // 透明じゃない場合（どこかの国の上）
+                    if (pixel[3] > 0) {
                         const colorKey = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
                         currentHoveredCountryName = colorToCountryMap[colorKey] || null;
                     }
                 }
             }
 
-            // 国が変わった瞬間だけネオンのON/OFFを切り替える（超高効率）
             if (currentHoveredCountryName !== lastHoveredCountryName) {
                 allCountryLines.forEach(line => {
                     if (line.userData.name === lastHoveredCountryName) {
                         line.material.opacity = 0.0; 
                     }
                     if (line.userData.name === currentHoveredCountryName) {
-                        line.material.opacity = 0.95; // 輪郭をクッキリネオン発光
+                        line.material.opacity = 0.95; 
                     }
                 });
                 lastHoveredCountryName = currentHoveredCountryName;
@@ -448,7 +433,6 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}</strong>`;
             }
 
-            // 3. 地球儀のドラッグ回転処理
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.004;
