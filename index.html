@@ -31,6 +31,54 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.1);
         }
+        /* 追加：ダブルクリック用のポップアップスタイル */
+        .airport-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(11, 15, 25, 0.95);
+            color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            display: none;
+            z-index: 20;
+            min-width: 280px;
+            max-width: 400px;
+        }
+        .airport-popup h3 {
+            margin-top: 0;
+            color: #00ffcc;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 8px;
+            font-size: 18px;
+        }
+        .airport-popup ul {
+            padding-left: 20px;
+            margin: 12px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .airport-popup li {
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+        .popup-close-btn {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            float: right;
+            font-size: 12px;
+        }
+        .popup-close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 </head>
@@ -39,9 +87,18 @@
     <div id="info-label" class="info-label"></div>
     <div id="canvas-container"></div>
 
+    <div id="airport-popup" class="airport-popup">
+        <button class="popup-close-btn" onclick="closePopup()">閉じる</button>
+        <h3 id="popup-title">国名</h3>
+        <ul id="popup-list"></ul>
+    </div>
+
     <script>
         const container = document.getElementById('canvas-container');
         const labelEl = document.getElementById('info-label');
+        const popupEl = document.getElementById('airport-popup');
+        const popupTitleEl = document.getElementById('popup-title');
+        const popupListEl = document.getElementById('popup-list');
         const RADIUS = 70;
 
         const scene = new THREE.Scene();
@@ -139,7 +196,7 @@
             { name: "アテネ国際空港 (ATH)", country: "ギリシャ", lat: 37.9364, lng: 23.9445 },
             { name: "ウィーン国際空港 (VIE)", country: "オーストリア", lat: 48.1103, lng: 16.5697 },
             { name: "コペンハーゲン空港 (CPH)", country: "デンマーク", lat: 55.6179, lng: 12.6560 },
-            { name: "ストックホルム・アーランダ空港 (ARN)", country: "ウェーデン", lat: 59.6519, lng: 17.9186 },
+            { name: "ストックホルム・アーランダ空港 (ARN)", country: "スウェーデン", lat: 59.6519, lng: 17.9186 },
             { name: "オスロ空港 (OSL)", country: "ノルウェー", lat: 60.1939, lng: 11.1004 },
             { name: "ヘルシンキ・ヴァンター空港 (HEL)", country: "フィンランド", lat: 60.3172, lng: 24.9633 },
             { name: "ショパン空港 / ワルシャワ (WAW)", country: "ポーランド", lat: 52.1657, lng: 20.9671 },
@@ -195,25 +252,24 @@
         pickCanvas.height = 2048;
         const pCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
 
+        // 色から国情報を一瞬で逆引きするための辞書（2レターコードも保持できるように拡張）
         const colorToCountryMap = {};
 
-        // ★大修正箇所①：海のレイヤーの奥行き（depthWrite）を true に！
-        // これによって「手前にある海が、地球の真裏にある線を隠す」という物理ルールが正しく働きます。
-        // 現在は【0.65】になっています。この数値を【0.85】や【1】にすると、さらに透けなくなります。
+        // 海のレイヤー（元の成功バージョンと同じ設定）
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
             color: 0x0c1432,       
             transparent: true, 
-            opacity: 0.35,         // ★ここをお好みで 0.5 ~ 1.0 の間で調整してください！
+            opacity: 0.65,         
             side: THREE.DoubleSide, 
-            depthWrite: true       // ★false から true に変更！これで透け具合が機能します！
+            depthWrite: true       
         });
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeMesh.userData = { type: 'globe' };
-        globeMesh.renderOrder = 1; // ★海の描画順を国境線の「前」に設定
+        globeMesh.renderOrder = 1; 
         globeGroup.add(globeMesh);
 
-        // カラー判定用の見えない球体（上記の海と同じサイズ・位置）
+        // カラー判定用の見えない球体
         const pickMesh = new THREE.Mesh(globeGeometry, new THREE.MeshBasicMaterial({ visible: false }));
         globeGroup.add(pickMesh);
 
@@ -228,6 +284,7 @@
         
         const allCountryLines = []; 
         let lastHoveredCountryName = null;
+        let currentUnderMouseCountry = null; // ★現在マウスの下にある国のデータを記憶する変数
 
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
@@ -277,13 +334,17 @@
                     const coordinates = feature.geometry.coordinates;
                     let countryName = feature.properties.NAME_JA || feature.properties.NAME || "不明な国";
                     if(countryName.includes("Antarctica")) countryName = "南極";
+                    
+                    // ★カスタマイズ：2レターコード（ISO_A2）を取得
+                    const code2 = feature.properties.ISO_A2 || "";
 
                     const r = (index + 1) & 0xff;
                     const g = ((index + 1) >> 8) & 0xff;
                     const b = ((index + 1) >> 16) & 0xff;
                     const colorKey = `rgb(${r},${g},${b})`;
                     
-                    colorToCountryMap[colorKey] = countryName;
+                    // ★カスタマイズ：国名とコードをセットで記憶
+                    colorToCountryMap[colorKey] = { name: countryName, code: code2 };
 
                     pCtx.fillStyle = colorKey;
 
@@ -351,7 +412,6 @@
             if (points.length < 2) return;
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             
-            // ★大修正箇所②：線の描画順（renderOrder）を海より「後ろ（2）」に変更
             const normalLine = new THREE.Line(lineGeometry, normalLineMaterial);
             normalLine.renderOrder = 2; 
             globeGroup.add(normalLine);
@@ -409,6 +469,7 @@
             }
 
             let currentHoveredCountryName = null;
+            let currentHoveredCountryCode = null;
             const globeIntersects = raycaster.intersectObject(pickMesh);
 
             if (globeIntersects.length > 0 && !isHoveringAirport) {
@@ -416,14 +477,23 @@
                 if (hit.uv) {
                     const x = Math.floor(hit.uv.x * pickCanvas.width);
                     const y = Math.floor((1.0 - hit.uv.y) * pickCanvas.height);
-
                     const pixel = pCtx.getImageData(x, y, 1, 1).data;
                     
                     if (pixel[3] > 0) {
                         const colorKey = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
-                        currentHoveredCountryName = colorToCountryMap[colorKey] || null;
+                        const countryInfo = colorToCountryMap[colorKey];
+                        if (countryInfo) {
+                            currentHoveredCountryName = countryInfo.name;
+                            currentHoveredCountryCode = countryInfo.code;
+                            // ダブルクリック用にデータをグローバル保存
+                            currentUnderMouseCountry = countryInfo;
+                        }
+                    } else {
+                        currentUnderMouseCountry = null;
                     }
                 }
+            } else if (isHoveringAirport) {
+                currentUnderMouseCountry = null;
             }
 
             if (currentHoveredCountryName !== lastHoveredCountryName) {
@@ -438,21 +508,58 @@
                 lastHoveredCountryName = currentHoveredCountryName;
             }
 
+            // ★カスタマイズ：ホバー時に国名＋「2レターコード」を表示
             if (currentHoveredCountryName && !isHoveringAirport) {
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
                 labelEl.style.top = `${e.clientY}px`;
-                labelEl.innerHTML = `<strong>${currentHoveredCountryName}</strong>`;
+                
+                const codeDisplay = currentHoveredCountryCode ? ` (${currentHoveredCountryCode})` : "";
+                labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
-            globeGroup.rotation.y += deltaMove.x * 0.004;
-            globeGroup.rotation.x += deltaMove.y * 0.004;
+            globeGroup.rotation.y += deltaMove.x * 0.002;
+            globeGroup.rotation.x += deltaMove.y * 0.002;
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
         window.addEventListener('mouseup', () => { isDragging = false; });
+
+        // ★追加カスタマイズ：ダブルクリックイベントで空港ポップアップを表示
+        window.addEventListener('dblclick', () => {
+            if (currentUnderMouseCountry) {
+                const targetCountry = currentUnderMouseCountry.name;
+                
+                // 空港データからこの国のものを抽出（フィルター）
+                const matchedAirports = cargoAirports.filter(ap => ap.country === targetCountry);
+                
+                // ポップアップの中身を作成
+                popupTitleEl.innerText = `${targetCountry} の主要国際空港`;
+                popupListEl.innerHTML = ""; // 初期化
+                
+                if (matchedAirports.length > 0) {
+                    matchedAirports.forEach(ap => {
+                        const li = document.createElement('li');
+                        li.innerText = ap.name;
+                        popupListEl.appendChild(li);
+                    });
+                } else {
+                    const li = document.createElement('li');
+                    li.innerHTML = "<span style='color:#aaa; font-style:italic;'>登録されている主要空港はありません</span>";
+                    popupListEl.appendChild(li);
+                }
+                
+                // ポップアップを表示
+                popupEl.style.display = 'block';
+            }
+        });
+
+        // ポップアップを閉じる関数
+        window.closePopup = function() {
+            popupEl.style.display = 'none';
+        }
         
         window.addEventListener('wheel', (e) => {
             currentZoom += e.deltaY * 0.1;
