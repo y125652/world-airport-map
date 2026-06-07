@@ -139,7 +139,7 @@
             { name: "アテネ国際空港 (ATH)", country: "ギリシャ", lat: 37.9364, lng: 23.9445 },
             { name: "ウィーン国際空港 (VIE)", country: "オーストリア", lat: 48.1103, lng: 16.5697 },
             { name: "コペンハーゲン空港 (CPH)", country: "デンマーク", lat: 55.6179, lng: 12.6560 },
-            { name: "ストックホルム・アーランダ空港 (ARN)", country: "スウェーデン", lat: 59.6519, lng: 17.9186 },
+            { name: "ストックホルム・アーランダ空港 (ARN)", country: "ウェーデン", lat: 59.6519, lng: 17.9186 },
             { name: "オスロ空港 (OSL)", country: "ノルウェー", lat: 60.1939, lng: 11.1004 },
             { name: "ヘルシンキ・ヴァンター空港 (HEL)", country: "フィンランド", lat: 60.3172, lng: 24.9633 },
             { name: "ショパン空港 / ワルシャワ (WAW)", country: "ポーランド", lat: 52.1657, lng: 20.9671 },
@@ -197,20 +197,25 @@
 
         const colorToCountryMap = {};
 
-        // ★海の透明度を絶妙に調整（不透明度を 20% から 65% に引き上げ）
-        // これにより、向こう側の線が「程よく曇って隠れる」ため、手前の大陸がめちゃくちゃ見やすくなります！
+        // ★大修正箇所①：海のレイヤーの奥行き（depthWrite）を true に！
+        // これによって「手前にある海が、地球の真裏にある線を隠す」という物理ルールが正しく働きます。
+        // 現在は【0.65】になっています。この数値を【0.85】や【1】にすると、さらに透けなくなります。
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x0c1432,       // 宇宙に溶け込む深みのあるディープブルー
+            color: 0x0c1432,       
             transparent: true, 
-            opacity: 1,         // ★ここを0.65（65%）にして「スモークガラス感」を出しました
+            opacity: 0.65,         // ★ここをお好みで 0.5 ~ 1.0 の間で調整してください！
             side: THREE.DoubleSide, 
-            depthWrite: false 
+            depthWrite: true       // ★false から true に変更！これで透け具合が機能します！
         });
         const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
         globeMesh.userData = { type: 'globe' };
-        globeMesh.renderOrder = 0;
+        globeMesh.renderOrder = 1; // ★海の描画順を国境線の「前」に設定
         globeGroup.add(globeMesh);
+
+        // カラー判定用の見えない球体（上記の海と同じサイズ・位置）
+        const pickMesh = new THREE.Mesh(globeGeometry, new THREE.MeshBasicMaterial({ visible: false }));
+        globeGroup.add(pickMesh);
 
         function lngLatToCanvas(lng, lat) {
             const x = ((lng + 180) / 360) * pickCanvas.width;
@@ -346,13 +351,14 @@
             if (points.length < 2) return;
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             
+            // ★大修正箇所②：線の描画順（renderOrder）を海より「後ろ（2）」に変更
             const normalLine = new THREE.Line(lineGeometry, normalLineMaterial);
-            normalLine.renderOrder = 1;
+            normalLine.renderOrder = 2; 
             globeGroup.add(normalLine);
 
             const highMat = highlightLineMaterial.clone();
             const highlightLine = new THREE.Line(lineGeometry, highMat);
-            highlightLine.renderOrder = 2;
+            highlightLine.renderOrder = 3; 
             highlightLine.userData = { name: name };
             globeGroup.add(highlightLine);
 
@@ -369,7 +375,7 @@
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.25);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
-            pin.renderOrder = 3; 
+            pin.renderOrder = 4; 
             globeGroup.add(pin);
             pins.push(pin);
         });
@@ -403,7 +409,7 @@
             }
 
             let currentHoveredCountryName = null;
-            const globeIntersects = raycaster.intersectObject(globeMesh);
+            const globeIntersects = raycaster.intersectObject(pickMesh);
 
             if (globeIntersects.length > 0 && !isHoveringAirport) {
                 const hit = globeIntersects[0];
