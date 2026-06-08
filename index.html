@@ -517,7 +517,7 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
 
-        // ダブルクリックイベント（不一致国を完璧に修正）
+        // ダブルクリックイベント（タイ王国も完璧に対応）
         window.addEventListener('dblclick', () => {
             if (currentUnderMouseCountry) {
                 let targetCountry = currentUnderMouseCountry.name;
@@ -527,6 +527,7 @@
                 if (targetCountry === "中華人民共和国") searchName = "中国";
                 if (targetCountry === "大韓民国") searchName = "韓国";
                 if (targetCountry === "南アフリカ共和国") searchName = "南アフリカ";
+                if (targetCountry === "タイ王国") searchName = "タイ"; // ★追加：タイの表記ズレ修正
                 
                 const matchedAirports = cargoAirports.filter(ap => ap.country === searchName);
                 
@@ -553,9 +554,9 @@
             popupEl.style.display = 'none';
         }
 
-        // ★追加：ポップアップ上でのスクロール操作が、後ろの地球儀のズームに連動するバグを防ぐシールド
+        // ポップアップ上でのスクロール操作が、後ろの地球儀のズームに連動するバグを防ぐシールド
         popupEl.addEventListener('wheel', (e) => {
-            e.stopPropagation(); // 操作の伝播をここで完全に遮断する
+            e.stopPropagation(); 
         }, { passive: false });
         
         window.addEventListener('wheel', (e) => {
