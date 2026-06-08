@@ -8,7 +8,7 @@
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #0b0f19;
+            background-color: #ffffff; /* ★背景を白に変更 */
             font-family: Arial, sans-serif;
             user-select: none;
         }
@@ -18,8 +18,8 @@
         }
         .info-label {
             position: absolute;
-            background: rgba(11, 15, 25, 0.9);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.95); /* ★ラベルを白基調に変更 */
+            color: #111111;                         /* ★文字を黒に変更 */
             padding: 8px 14px;
             border-radius: 6px;
             font-size: 13px;
@@ -28,19 +28,19 @@
             display: none;
             z-index: 10;
             transform: translate(15px, -50%);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 影をマイルドに */
+            border: 1px solid rgba(0,0,0,0.1);
         }
         .airport-popup {
             position: absolute;
             bottom: 24px;         
             left: 24px;           
-            background: rgba(11, 15, 25, 0.95);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.95); /* ★ポップアップを白基調に変更 */
+            color: #111111;                         /* ★文字を黒に変更 */
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
-            border: 1px solid rgba(0, 255, 204, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border: 1px solid rgba(0, 255, 204, 0.5); /* 発光ラインはアクセントとして維持 */
             display: none;
             z-index: 20;
             min-width: 280px;
@@ -48,8 +48,8 @@
         }
         .airport-popup h3 {
             margin-top: 0;
-            color: #00ffcc;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+            color: #00aa88; /* ★白背景で見やすい濃いめのシアングリーンに変更 */
+            border-bottom: 1px solid rgba(0,0,0,0.1);
             padding-bottom: 8px;
             font-size: 18px;
         }
@@ -62,17 +62,17 @@
         .airport-popup li {
             margin-bottom: 6px;
             font-size: 14px;
-            color: #e0e0e0;
+            color: #333333; /* ★リスト文字を濃いグレーに変更 */
             cursor: pointer;
             transition: color 0.2s, padding-left 0.2s;
         }
         .airport-popup li:hover {
-            color: #00ffcc;          
+            color: #00aa88;          
             padding-left: 4px;       
         }
         .popup-close-btn {
-            background: rgba(255,255,255,0.1);
-            color: white;
+            background: rgba(0,0,0,0.05);
+            color: #333333;
             border: none;
             padding: 6px 12px;
             border-radius: 4px;
@@ -81,7 +81,7 @@
             font-size: 12px;
         }
         .popup-close-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.1);
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
@@ -106,6 +106,9 @@
         const RADIUS = 70;
 
         const scene = new THREE.Scene();
+        // ★背景が白なので、シーンの背景色も白に設定
+        scene.background = new THREE.Color(0xffffff);
+
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         let currentZoom = 180;
@@ -120,7 +123,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // あなたがひと月で触れるコード群を完全統合した全94拠点の最新データ
+        // 全94拠点の最新データ
         const cargoAirports = [
             // 日本
             { name: "東京国際空港 / 羽田 (HND)", country: "日本", lat: 35.5494, lng: 139.7798 },
@@ -250,13 +253,13 @@
             { name: "カンクン国際空港 (CUN)", country: "メキシコ", lat: 21.0365, lng: -86.8771 },
             { name: "グアダラハラ国際空港 (GDL)", country: "メキシコ", lat: 20.5218, lng: -103.3111 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
-            { name: "エルドラド国際空港 (BOG)", country: "コロンプレ", lat: 4.7016, lng: -74.1469 },
+            { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7016, lng: -74.1469 },
             { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホセ・ホアキン・デ_オルメード国際空港 (GYE)", country: "エクアドル", lat: -2.1574, lng: -79.8835 },
+            { name: "ホセ・ホアキン・デ・オルメード国際空港 (GYE)", country: "エクアドル", lat: -2.1574, lng: -79.8835 },
 
             // オセアニア
             { name: "シドニー・キングスフォード・スミス空港 (SYD)", country: "オーストラリア", lat: -33.9461, lng: 151.1772 },
@@ -296,12 +299,13 @@
 
         const colorToCountryMap = {};
 
-        // 海の調整：色をディープネイビー（0x070d22）に落とし、明暗のコントラストで線を引き立てる
+        // ★海の調整：色を洗練されたホワイト（0xf5f5f7）に変更。
+        // 単色のベタ塗りだとエッジが消えるため、影をほんのり乗せられる「MeshLambertMaterial」に進化させました！
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const globeMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x070d22,       
+        const globeMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xf5f5f7,       
             transparent: true, 
-            opacity: 0.35,         
+            opacity: 0.35, // シースルー透過率はキープ
             side: THREE.DoubleSide, 
             depthWrite: true       
         });
@@ -309,6 +313,13 @@
         globeMesh.userData = { type: 'globe' };
         globeMesh.renderOrder = 1; 
         globeGroup.add(globeMesh);
+
+        // 白い球体を立体的に見せるための薄い環境光と平行光源を追加
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xdddddd, 0.4);
+        dirLight.position.set(5, 3, 5);
+        scene.add(dirLight);
 
         const pickMesh = new THREE.Mesh(globeGeometry, new THREE.MeshBasicMaterial({ visible: false }));
         globeGroup.add(pickMesh);
@@ -319,8 +330,8 @@
             return { x, y };
         }
 
-        // 国境マテリアルの調整：普段の線の不透明度を 0.65 へ（超くっきり化）
-        const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
+        // ★国境マテリアルの調整：普段の線の色を「黒（0x111111）」へ変更！
+        const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.65 });
         const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.0 });
         
         const allCountryLines = []; 
@@ -403,8 +414,7 @@
             pCtx.beginPath();
             const outerRing = polygon[0];
             let pStart = lngLatToCanvas(outerRing[0][0], outerRing[0][1]);
-            pStart = pStart || {x:0, y:0};
-            pCtx.moveTo(pStart.x, pStart.y);
+            if(pStart) pCtx.moveTo(pStart.x, pStart.y);
             for (let i = 1; i < outerRing.length; i++) {
                 let p = lngLatToCanvas(outerRing[i][0], outerRing[i][1]);
                 pCtx.lineTo(p.x, p.y);
@@ -418,7 +428,7 @@
                     pCtx.beginPath();
                     const holeRing = polygon[i];
                     let pSubStart = lngLatToCanvas(holeRing[0][0], holeRing[0][1]);
-                    pCtx.moveTo(pSubStart.x, pSubStart.y);
+                    if(pSubStart) pCtx.moveTo(pSubStart.x, pSubStart.y);
                     for (let j = 1; j < holeRing.length; j++) {
                         let pSub = lngLatToCanvas(holeRing[j][0], holeRing[j][1]);
                         pCtx.lineTo(pSub.x, pSub.y);
@@ -555,6 +565,7 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
+            // 回転速度 0.002
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.002; 
