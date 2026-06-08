@@ -170,7 +170,7 @@
             { name: "ドバイ国際空港 (DXB)", country: "アラブ首長国連邦", lat: 25.2532, lng: 55.3657 },
             { name: "アブダビ国際空港 (AUH)", country: "アラブ首長国連邦", lat: 24.4330, lng: 54.6511 },
             { name: "ハマド国際空港 (DOH)", country: "カタール", lat: 25.2611, lng: 51.5650 },
-            { name: "キング・アブドゥルアズィーズ国際空港 (JED)", country: "サウジグラビア", lat: 21.6796, lng: 39.1565 },
+            { name: "キング・アブドゥルアズィーズ国際空港 (JED)", country: "サウジアラビア", lat: 21.6796, lng: 39.1565 },
             { name: "キング・ハーリド国際空港 (RUH)", country: "サウジアラビア", lat: 24.9576, lng: 46.6988 },
             { name: "マスカット国際空港 (MCT)", country: "オマーン", lat: 23.5933, lng: 58.2844 },
             { name: "ベン・グルオン国際空港 (TLV)", country: "イスラエル", lat: 32.0114, lng: 34.8867 },
@@ -231,7 +231,7 @@
             { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
-            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 }, // ★タイポ修正箇所
+            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
 
             // アフリカ
@@ -251,7 +251,7 @@
 
         const colorToCountryMap = {};
 
-        // 海の透明度を 0.35 に調整
+        // 海の透明度 0.35 設定
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
             color: 0x0c1432,       
@@ -507,7 +507,7 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
-            // 回転速度を左右・上下ともに「0.002」に調整
+            // 回転速度 0.002
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.002; 
@@ -517,7 +517,7 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
 
-        // ダブルクリックイベント（空港検索の表記揺れ自動対応版）
+        // ダブルクリックイベント（不一致国を完璧に修正）
         window.addEventListener('dblclick', () => {
             if (currentUnderMouseCountry) {
                 let targetCountry = currentUnderMouseCountry.name;
@@ -525,6 +525,8 @@
                 let searchName = targetCountry;
                 if (targetCountry === "アメリカ合衆国") searchName = "アメリカ";
                 if (targetCountry === "中華人民共和国") searchName = "中国";
+                if (targetCountry === "大韓民国") searchName = "韓国";
+                if (targetCountry === "南アフリカ共和国") searchName = "南アフリカ";
                 
                 const matchedAirports = cargoAirports.filter(ap => ap.country === searchName);
                 
@@ -550,6 +552,11 @@
         window.closePopup = function() {
             popupEl.style.display = 'none';
         }
+
+        // ★追加：ポップアップ上でのスクロール操作が、後ろの地球儀のズームに連動するバグを防ぐシールド
+        popupEl.addEventListener('wheel', (e) => {
+            e.stopPropagation(); // 操作の伝播をここで完全に遮断する
+        }, { passive: false });
         
         window.addEventListener('wheel', (e) => {
             currentZoom += e.deltaY * 0.1;
