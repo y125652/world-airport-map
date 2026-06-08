@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Globe (Perfect 2D Color-Pick Hybrid)</title>
+    <title>3D Pure Vector Globe (Enhanced Neon Visibility)</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #ffffff; /* ★背景を白に変更 */
+            background-color: #0b0f19;
             font-family: Arial, sans-serif;
             user-select: none;
         }
@@ -18,8 +18,8 @@
         }
         .info-label {
             position: absolute;
-            background: rgba(255, 255, 255, 0.95); /* ★ラベルを白基調に変更 */
-            color: #111111;                         /* ★文字を黒に変更 */
+            background: rgba(11, 15, 25, 0.9);
+            color: #ffffff;
             padding: 8px 14px;
             border-radius: 6px;
             font-size: 13px;
@@ -28,19 +28,19 @@
             display: none;
             z-index: 10;
             transform: translate(15px, -50%);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 影をマイルドに */
-            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
         }
         .airport-popup {
             position: absolute;
             bottom: 24px;         
             left: 24px;           
-            background: rgba(255, 255, 255, 0.95); /* ★ポップアップを白基調に変更 */
-            color: #111111;                         /* ★文字を黒に変更 */
+            background: rgba(11, 15, 25, 0.95);
+            color: #ffffff;
             padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            border: 1px solid rgba(0, 255, 204, 0.5); /* 発光ラインはアクセントとして維持 */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            border: 1px solid rgba(0, 255, 204, 0.3);
             display: none;
             z-index: 20;
             min-width: 280px;
@@ -48,8 +48,8 @@
         }
         .airport-popup h3 {
             margin-top: 0;
-            color: #00aa88; /* ★白背景で見やすい濃いめのシアングリーンに変更 */
-            border-bottom: 1px solid rgba(0,0,0,0.1);
+            color: #00ffcc;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 8px;
             font-size: 18px;
         }
@@ -62,17 +62,17 @@
         .airport-popup li {
             margin-bottom: 6px;
             font-size: 14px;
-            color: #333333; /* ★リスト文字を濃いグレーに変更 */
+            color: #e0e0e0;
             cursor: pointer;
             transition: color 0.2s, padding-left 0.2s;
         }
         .airport-popup li:hover {
-            color: #00aa88;          
+            color: #00ffcc;          
             padding-left: 4px;       
         }
         .popup-close-btn {
-            background: rgba(0,0,0,0.05);
-            color: #333333;
+            background: rgba(255,255,255,0.1);
+            color: white;
             border: none;
             padding: 6px 12px;
             border-radius: 4px;
@@ -81,7 +81,7 @@
             font-size: 12px;
         }
         .popup-close-btn:hover {
-            background: rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.2);
         }
     </style>
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
@@ -106,9 +106,6 @@
         const RADIUS = 70;
 
         const scene = new THREE.Scene();
-        // ★背景が白なので、シーンの背景色も白に設定
-        scene.background = new THREE.Color(0xffffff);
-
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
         let currentZoom = 180;
@@ -123,7 +120,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // 全94拠点の最新データ
+        // 世界の主要な国際線ハブ空港データ
         const cargoAirports = [
             // 日本
             { name: "東京国際空港 / 羽田 (HND)", country: "日本", lat: 35.5494, lng: 139.7798 },
@@ -259,7 +256,7 @@
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
-            { name: "ホセ・ホアキン・デ・オルメード国際空港 (GYE)", country: "エクアドル", lat: -2.1574, lng: -79.8835 },
+            { name: "ホセ・ホアキン・デ_オルメード国際空港 (GYE)", country: "エクアドル", lat: -2.1574, lng: -79.8835 },
 
             // オセアニア
             { name: "シドニー・キングスフォード・スミス空港 (SYD)", country: "オーストラリア", lat: -33.9461, lng: 151.1772 },
@@ -305,7 +302,7 @@
         const globeMaterial = new THREE.MeshLambertMaterial({ 
             color: 0xf5f5f7,       
             transparent: true, 
-            opacity: 0.35, // シースルー透過率はキープ
+            opacity: 0.35, 
             side: THREE.DoubleSide, 
             depthWrite: true       
         });
@@ -332,7 +329,7 @@
 
         // ★国境マテリアルの調整：普段の線の色を「黒（0x111111）」へ変更！
         const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.65 });
-        const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x7f00ff, transparent: true, opacity: 0.0 });
+        const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.0 });
         
         const allCountryLines = []; 
         let lastHoveredCountryName = null;
