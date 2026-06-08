@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Globe (Perfect Pure White Edition)</title>
+    <title>3D Pure Vector Globe (White Background & Grey Sea)</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #ffffff; /* 背景を完全な白に */
+            background-color: #ffffff; /* 背景は完全な白 */
             font-family: Arial, sans-serif;
             user-select: none;
         }
@@ -40,7 +40,7 @@
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            border: 1px solid #7f00ff; /* ポップアップの枠線もバイオレットに同期 */
+            border: 1px solid #7f00ff; 
             display: none;
             z-index: 20;
             min-width: 280px;
@@ -48,7 +48,7 @@
         }
         .airport-popup h3 {
             margin-top: 0;
-            color: #7f00ff; /* タイトルもバイオレットで統一 */
+            color: #7f00ff; 
             border-bottom: 1px solid rgba(0,0,0,0.1);
             padding-bottom: 8px;
             font-size: 18px;
@@ -106,8 +106,7 @@
         const RADIUS = 70;
 
         const scene = new THREE.Scene();
-        // ★背景を100%ピュアホワイトに設定
-        scene.background = new THREE.Color(0xffffff);
+        scene.background = new THREE.Color(0xffffff); // 背景は白
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -123,7 +122,7 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // 全94拠点の最新データ
+        // 全94拠点の最新マスターデータ
         const cargoAirports = [
             // 日本
             { name: "東京国際空港 / 羽田 (HND)", country: "日本", lat: 35.5494, lng: 139.7798 },
@@ -208,7 +207,7 @@
             { name: "ビルン空港 (BLL)", country: "デンマーク", lat: 55.7403, lng: 9.1517 },
             { name: "ストックホルム・アーランダ空港 (ARN)", country: "スウェーデン", lat: 59.6519, lng: 17.9186 },
             { name: "ヨーテボリ・ランドヴェッテル空港 (GOT)", country: "スウェーデン", lat: 57.6628, lng: 12.2797 },
-            { name: "オスロ空港 (OSL)", country: "ノルウェย", lat: 60.1939, lng: 11.1004 },
+            { name: "オスロ空港 (OSL)", country: "ノルウェー", lat: 60.1939, lng: 11.1004 },
             { name: "ヘルシンキ・ヴァンター空港 (HEL)", country: "フィンランド", lat: 60.3172, lng: 24.9633 },
             { name: "ショパン空港 / ワルシャワ (WAW)", country: "ポーランド", lat: 52.1657, lng: 20.9671 },
             { name: "イスタンブール空港 (IST)", country: "トルコ", lat: 41.2753, lng: 28.7519 },
@@ -299,13 +298,13 @@
 
         const colorToCountryMap = {};
 
-        // ★大修正：海の球体を純白（0xffffff）に変更、陰影なしのピュアフラット構造（MeshBasicMaterial）へ回帰
-        // これにより、宇宙（背景）と同化して境界が完全にスッキリ消えます
+        // ★大修正：海のマテリアルを「ライトグレー（0xdddddd）」に変更
+        // これにより背景の白（0xffffff）との境界が生まれ、球体の形状が美しくくっきり見えます
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xffffff,       
+            color: 0xdddddd,       
             transparent: true, 
-            opacity: 1.0,  /* 完全なシールドとして裏側の線を完璧に遮断 */
+            opacity: 1.0,  
             side: THREE.DoubleSide, 
             depthWrite: true       
         });
@@ -323,8 +322,8 @@
             return { x, y };
         }
 
-        // ★国境マテリアル：普段の線を薄い黒（0x222222）に変更してミニマルな線画調に
-        // ハイライト（ネオン）は最も白背景に映える「ハイパーバイオレット（0x7f00ff）」を標準装備
+        // 国境マテリアル：普段の線はシャープな薄い黒（0x222222）
+        // ハイライトネオンは白・グレーの背景で最も視認性の高いハイパーバイオレット（0x7f00ff）
         const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.65 });
         const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x7f00ff, transparent: true, opacity: 0.0 });
         
@@ -543,7 +542,6 @@
                     if (line.userData.name === lastHoveredCountryName && line.userData.name !== activeSelectedCountryName) {
                         line.material.opacity = 0.0; 
                     }
-                    // ★ホバーロック不透明度を 1.0 にして白背景でクッキリ発光
                     if (line.userData.name === currentHoveredCountryName) {
                         line.material.opacity = 1.0; 
                     }
@@ -560,7 +558,6 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
-            // 回転速度 0.002
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.002; 
@@ -642,7 +639,6 @@
             pins.forEach(pin => {
                 if (pin.userData.name === airportName) {
                     if (shouldHighlight) {
-                        // ポップアップホバー時はバイオレットに同期発光
                         pin.material.color.setHex(0x7f00ff); 
                         pin.scale.set(1.8, 1.8, 1.8);        
                     } else {
