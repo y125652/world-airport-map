@@ -59,7 +59,6 @@
             max-height: 200px;
             overflow-y: auto;
         }
-        /* 追加：ポップアップ内のリストアイテム（空港名）のホバースタイル */
         .airport-popup li {
             margin-bottom: 6px;
             font-size: 14px;
@@ -68,8 +67,8 @@
             transition: color 0.2s, padding-left 0.2s;
         }
         .airport-popup li:hover {
-            color: #00ffcc;          /* ホバー時に近未来グリーンに発光 */
-            padding-left: 4px;       /* 選択時にちょっとだけ右にスライドする小技 */
+            color: #00ffcc;          
+            padding-left: 4px;       
         }
         .popup-close-btn {
             background: rgba(255,255,255,0.1);
@@ -258,10 +257,10 @@
 
         const colorToCountryMap = {};
 
-        // 海の透明度 0.35 設定
+        // ★海の調整：色をディープネイビー（0x070d22）に落とし、明暗のコントラストで線を引き立てる
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x0c1432,       
+            color: 0x070d22,       
             transparent: true, 
             opacity: 0.35,         
             side: THREE.DoubleSide, 
@@ -281,12 +280,14 @@
             return { x, y };
         }
 
-        const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25 });
+        // ★国境マテリアルの調整：普段の線の不透明度を 0.25 ➔ 0.65 へ大幅強化（超くっきり化）
+        const normalLineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.65 });
         const highlightLineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.0 });
         
         const allCountryLines = []; 
         let lastHoveredCountryName = null;
         let currentUnderMouseCountry = null; 
+        let activeSelectedCountryName = null; 
 
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
@@ -429,7 +430,6 @@
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
 
         cargoAirports.forEach(airport => {
-            // クローンマテリアルにして個別に色や輝きを変えられるように変更
             const pin = new THREE.Mesh(pinGeometry, pinMaterial.clone());
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.25);
             pin.position.copy(pos);
@@ -496,11 +496,12 @@
 
             if (currentHoveredCountryName !== lastHoveredCountryName) {
                 allCountryLines.forEach(line => {
-                    if (line.userData.name === lastHoveredCountryName) {
+                    if (line.userData.name === lastHoveredCountryName && line.userData.name !== activeSelectedCountryName) {
                         line.material.opacity = 0.0; 
                     }
+                    // ★ホバー発光の最大不透明度を 0.95 ➔ 1.0 に引き上げ（くっきり化）
                     if (line.userData.name === currentHoveredCountryName) {
-                        line.material.opacity = 0.95; 
+                        line.material.opacity = 1.0; 
                     }
                 });
                 lastHoveredCountryName = currentHoveredCountryName;
@@ -525,10 +526,24 @@
 
         window.addEventListener('mouseup', () => { isDragging = false; });
 
-        // ダブルクリックイベント（タイ王国も完璧に対応）
+        // ダブルクリックイベント
         window.addEventListener('dblclick', () => {
             if (currentUnderMouseCountry) {
                 let targetCountry = currentUnderMouseCountry.name;
+                
+                if (activeSelectedCountryName && activeSelectedCountryName !== targetCountry) {
+                    allCountryLines.forEach(line => {
+                        if (line.userData.name === activeSelectedCountryName) line.material.opacity = 0.0;
+                    });
+                }
+                activeSelectedCountryName = targetCountry;
+
+                // ★選択固定ロック（キープ）の不透明度を 0.95 ➔ 1.0 に最大化
+                allCountryLines.forEach(line => {
+                    if (line.userData.name === activeSelectedCountryName) {
+                        line.material.opacity = 1.0;
+                    }
+                });
                 
                 let searchName = targetCountry;
                 if (targetCountry === "アメリカ合衆国") searchName = "アメリカ";
@@ -547,13 +562,8 @@
                         const li = document.createElement('li');
                         li.innerText = ap.name;
                         
-                        // ★カスタマイズ：リストアイテムにホバーイベントを仕込む
-                        li.addEventListener('mouseenter', () => {
-                            highlight3DPin(ap.name, true);
-                        });
-                        li.addEventListener('mouseleave', () => {
-                            highlight3DPin(ap.name, false);
-                        });
+                        li.addEventListener('mouseenter', () => { highlight3DPin(ap.name, true); });
+                        li.addEventListener('mouseleave', () => { highlight3DPin(ap.name, false); });
                         
                         popupListEl.appendChild(li);
                     });
@@ -569,32 +579,37 @@
 
         window.closePopup = function() {
             popupEl.style.display = 'none';
-            // ポップアップを閉じたらすべてのピンを通常状態に戻す安全処理
+            
+            if (activeSelectedCountryName) {
+                allCountryLines.forEach(line => {
+                    if (line.userData.name === activeSelectedCountryName) {
+                        line.material.opacity = 0.0;
+                    }
+                });
+                activeSelectedCountryName = null; 
+            }
+
             pins.forEach(pin => {
                 pin.material.color.setHex(0xff2d55);
                 pin.scale.set(1, 1, 1);
             });
         }
 
-        // ★新設：リストホバー時に3Dピンを強調・リセットする検索関数
         function highlight3DPin(airportName, shouldHighlight) {
             pins.forEach(pin => {
                 if (pin.userData.name === airportName) {
                     if (shouldHighlight) {
-                        pin.material.color.setHex(0x00ffcc); // ネオンシアンに変更
-                        pin.scale.set(1.8, 1.8, 1.8);        // サイズを1.8倍に爆大化
+                        pin.material.color.setHex(0x00ffcc); 
+                        pin.scale.set(1.8, 1.8, 1.8);        
                     } else {
-                        pin.material.color.setHex(0xff2d55); // 元のピンクレッドに戻す
-                        pin.scale.set(1, 1, 1);              // サイズを元に戻す
+                        pin.material.color.setHex(0xff2d55); 
+                        pin.scale.set(1, 1, 1);              
                     }
                 }
             });
         }
 
-        // ポップアップ上でのスクロール操作が、後ろの地球儀のズームに連動するバグを防ぐシールド
-        popupEl.addEventListener('wheel', (e) => {
-            e.stopPropagation(); 
-        }, { passive: false });
+        popupEl.addEventListener('wheel', (e) => { e.stopPropagation(); }, { passive: false });
         
         window.addEventListener('wheel', (e) => {
             currentZoom += e.deltaY * 0.1;
