@@ -31,12 +31,11 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.1);
         }
-        /* 追加：ダブルクリック用のポップアップスタイル */
+        /* アップデート：ポップアップの配置を「中央」から「左下」に変更 */
         .airport-popup {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            bottom: 24px;         /* 画面下部からの距離 */
+            left: 24px;           /* 画面左側からの距離 */
             background: rgba(11, 15, 25, 0.95);
             color: #ffffff;
             padding: 20px;
@@ -116,9 +115,9 @@
         const globeGroup = new THREE.Group();
         scene.add(globeGroup);
 
-        // 世界の主要な国際線ハブ空港データ（100拠点超）
+        // 世界の主要な国際線ハブ空港データ
         const cargoAirports = [
-            // 日本 (主要都市・拠点空港)
+            // 日本
             { name: "東京国際空港 / 羽田 (HND)", country: "日本", lat: 35.5494, lng: 139.7798 },
             { name: "成田国際空港 (NRT)", country: "日本", lat: 35.7720, lng: 140.3929 },
             { name: "関西国際空港 (KIX)", country: "日本", lat: 34.4320, lng: 135.2303 },
@@ -230,10 +229,10 @@
             { name: "カンクン国際空港 (CUN)", country: "メキシコ", lat: 21.0365, lng: -86.8771 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7016, lng: -74.1469 },
-            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホル跨チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
-            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
+            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.53ons },
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
 
             // アフリカ
@@ -246,21 +245,19 @@
             { name: "ムルタラ・モハンマド国際空港 (LOS)", country: "ナイジェリア", lat: 6.5774, lng: 3.3210 }
         ];
 
-        // 2D判定用カラーキャンバス（メモリ上）
         const pickCanvas = document.createElement('canvas');
         pickCanvas.width = 4096;
         pickCanvas.height = 2048;
         const pCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
 
-        // 色から国情報を一瞬で逆引きするための辞書（2レターコードも保持できるように拡張）
         const colorToCountryMap = {};
 
-        // 海のレイヤー（元の成功バージョンと同じ設定）
+        // ★アップデート項目①：海の透明度を「0.35」に変更
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
             color: 0x0c1432,       
             transparent: true, 
-            opacity: 0.65,         
+            opacity: 0.35,         // ご要望通りの透過率に調整
             side: THREE.DoubleSide, 
             depthWrite: true       
         });
@@ -269,7 +266,6 @@
         globeMesh.renderOrder = 1; 
         globeGroup.add(globeMesh);
 
-        // カラー判定用の見えない球体
         const pickMesh = new THREE.Mesh(globeGeometry, new THREE.MeshBasicMaterial({ visible: false }));
         globeGroup.add(pickMesh);
 
@@ -284,7 +280,7 @@
         
         const allCountryLines = []; 
         let lastHoveredCountryName = null;
-        let currentUnderMouseCountry = null; // ★現在マウスの下にある国のデータを記憶する変数
+        let currentUnderMouseCountry = null; 
 
         function latLngToVector3(lat, lng, radius) {
             const phi = (90 - lat) * (Math.PI / 180);
@@ -323,7 +319,6 @@
             return newRing;
         }
 
-        // GeoJSON取得と2Dマップの自動色分けビルド
         fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
             .then(res => res.json())
             .then(geoJson => {
@@ -335,7 +330,6 @@
                     let countryName = feature.properties.NAME_JA || feature.properties.NAME || "不明な国";
                     if(countryName.includes("Antarctica")) countryName = "南極";
                     
-                    // ★カスタマイズ：2レターコード（ISO_A2）を取得
                     const code2 = feature.properties.ISO_A2 || "";
 
                     const r = (index + 1) & 0xff;
@@ -343,7 +337,6 @@
                     const b = ((index + 1) >> 16) & 0xff;
                     const colorKey = `rgb(${r},${g},${b})`;
                     
-                    // ★カスタマイズ：国名とコードをセットで記憶
                     colorToCountryMap[colorKey] = { name: countryName, code: code2 };
 
                     pCtx.fillStyle = colorKey;
@@ -425,7 +418,6 @@
             allCountryLines.push(highlightLine);
         }
 
-        // 貨物空港ピン（サイズ0.45）
         const pins = [];
         const pinGeometry = new THREE.SphereGeometry(0.45, 16, 16);
         const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
@@ -485,7 +477,6 @@
                         if (countryInfo) {
                             currentHoveredCountryName = countryInfo.name;
                             currentHoveredCountryCode = countryInfo.code;
-                            // ダブルクリック用にデータをグローバル保存
                             currentUnderMouseCountry = countryInfo;
                         }
                     } else {
@@ -508,7 +499,6 @@
                 lastHoveredCountryName = currentHoveredCountryName;
             }
 
-            // ★カスタマイズ：ホバー時に国名＋「2レターコード」を表示
             if (currentHoveredCountryName && !isHoveringAirport) {
                 labelEl.style.display = 'block';
                 labelEl.style.left = `${e.clientX}px`;
@@ -518,26 +508,31 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
+            // ★アップデート項目②：回転速度を左右・上下ともに「0.002」に減速調整
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
-            globeGroup.rotation.y += deltaMove.x * 0.002;
-            globeGroup.rotation.x += deltaMove.y * 0.002;
+            globeGroup.rotation.y += deltaMove.x * 0.002; 
+            globeGroup.rotation.x += deltaMove.y * 0.002; 
             previousMousePosition = { x: e.clientX, y: e.clientY };
         });
 
         window.addEventListener('mouseup', () => { isDragging = false; });
 
-        // ★追加カスタマイズ：ダブルクリックイベントで空港ポップアップを表示
+        // ダブルクリックイベント（空港検索の表記揺れ自動対応版）
         window.addEventListener('dblclick', () => {
             if (currentUnderMouseCountry) {
-                const targetCountry = currentUnderMouseCountry.name;
+                let targetCountry = currentUnderMouseCountry.name;
                 
-                // 空港データからこの国のものを抽出（フィルター）
-                const matchedAirports = cargoAirports.filter(ap => ap.country === targetCountry);
+                // ★大修正：地図データの名称を、空港データの名称（アメリカ、中国）へ自動翻訳する処理
+                let searchName = targetCountry;
+                if (targetCountry === "アメリカ合衆国") searchName = "アメリカ";
+                if (targetCountry === "中華人民共和国") searchName = "中国";
                 
-                // ポップアップの中身を作成
-                popupTitleEl.innerText = `${targetCountry} の主要国際空港`;
-                popupListEl.innerHTML = ""; // 初期化
+                // 翻訳後の名前で空港データを正しくフィルタリング
+                const matchedAirports = cargoAirports.filter(ap => ap.country === searchName);
+                
+                popupTitleEl.innerText = `${searchName} の主要国際空港`;
+                popupListEl.innerHTML = ""; 
                 
                 if (matchedAirports.length > 0) {
                     matchedAirports.forEach(ap => {
@@ -551,12 +546,10 @@
                     popupListEl.appendChild(li);
                 }
                 
-                // ポップアップを表示
                 popupEl.style.display = 'block';
             }
         });
 
-        // ポップアップを閉じる関数
         window.closePopup = function() {
             popupEl.style.display = 'none';
         }
