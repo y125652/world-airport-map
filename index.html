@@ -31,11 +31,10 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.1);
         }
-        /* アップデート：ポップアップの配置を「中央」から「左下」に変更 */
         .airport-popup {
             position: absolute;
-            bottom: 24px;         /* 画面下部からの距離 */
-            left: 24px;           /* 画面左側からの距離 */
+            bottom: 24px;         
+            left: 24px;           
             background: rgba(11, 15, 25, 0.95);
             color: #ffffff;
             padding: 20px;
@@ -171,7 +170,7 @@
             { name: "ドバイ国際空港 (DXB)", country: "アラブ首長国連邦", lat: 25.2532, lng: 55.3657 },
             { name: "アブダビ国際空港 (AUH)", country: "アラブ首長国連邦", lat: 24.4330, lng: 54.6511 },
             { name: "ハマド国際空港 (DOH)", country: "カタール", lat: 25.2611, lng: 51.5650 },
-            { name: "キング・アブドゥルアズィーズ国際空港 (JED)", country: "サウジアラビア", lat: 21.6796, lng: 39.1565 },
+            { name: "キング・アブドゥルアズィーズ国際空港 (JED)", country: "サウジグラビア", lat: 21.6796, lng: 39.1565 },
             { name: "キング・ハーリド国際空港 (RUH)", country: "サウジアラビア", lat: 24.9576, lng: 46.6988 },
             { name: "マスカット国際空港 (MCT)", country: "オマーン", lat: 23.5933, lng: 58.2844 },
             { name: "ベン・グルオン国際空港 (TLV)", country: "イスラエル", lat: 32.0114, lng: 34.8867 },
@@ -229,10 +228,10 @@
             { name: "カンクン国際空港 (CUN)", country: "メキシコ", lat: 21.0365, lng: -86.8771 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7016, lng: -74.1469 },
-            { name: "ホル跨チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
-            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.53ons },
+            { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 }, // ★タイポ修正箇所
             { name: "アルトゥーロ・メリノ・ベニテス国際空港 (SCL)", country: "チリ", lat: -33.3930, lng: -70.7858 },
 
             // アフリカ
@@ -252,12 +251,12 @@
 
         const colorToCountryMap = {};
 
-        // ★アップデート項目①：海の透明度を「0.35」に変更
+        // 海の透明度を 0.35 に調整
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeMaterial = new THREE.MeshBasicMaterial({ 
             color: 0x0c1432,       
             transparent: true, 
-            opacity: 0.35,         // ご要望通りの透過率に調整
+            opacity: 0.35,         
             side: THREE.DoubleSide, 
             depthWrite: true       
         });
@@ -508,7 +507,7 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
-            // ★アップデート項目②：回転速度を左右・上下ともに「0.002」に減速調整
+            // 回転速度を左右・上下ともに「0.002」に調整
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.002; 
@@ -523,12 +522,10 @@
             if (currentUnderMouseCountry) {
                 let targetCountry = currentUnderMouseCountry.name;
                 
-                // ★大修正：地図データの名称を、空港データの名称（アメリカ、中国）へ自動翻訳する処理
                 let searchName = targetCountry;
                 if (targetCountry === "アメリカ合衆国") searchName = "アメリカ";
                 if (targetCountry === "中華人民共和国") searchName = "中国";
                 
-                // 翻訳後の名前で空港データを正しくフィルタリング
                 const matchedAirports = cargoAirports.filter(ap => ap.country === searchName);
                 
                 popupTitleEl.innerText = `${searchName} の主要国際空港`;
