@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Globe (Navy Land & Grey Sea Edition)</title>
+    <title>3D Pure Vector Globe (Perfect Color Separation)</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #ffffff; /* ★宇宙（背景）を白に設定 */
+            background-color: #ffffff; /* 宇宙（背景）は白 */
             font-family: Arial, sans-serif;
             user-select: none;
         }
@@ -106,7 +106,7 @@
         const RADIUS = 70;
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xffffff); // ★宇宙（背景）を白に固定
+        scene.background = new THREE.Color(0xffffff); // 背景：白
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -189,7 +189,7 @@
             { name: "パリ・シャルル・ド・ゴール空港 (CDG)", country: "フランス", lat: 49.0097, lng: 2.5479 },
             { name: "パリ・オルリー空港 (ORY)", country: "フランス", lat: 48.7253, lng: 2.3594 },
             { name: "フランクフルト空港 (FRA)", country: "ドイツ", lat: 50.0379, lng: 8.5622 },
-            { name: "ミュンヘン空港 (MUC)", country: "ドイツ", lat: 48.3538, lng: 11.7861 },
+            { name: "ミュン丰富空港 (MUC)", country: "ドイツ", lat: 48.3538, lng: 11.7861 },
             { name: "ニュルンベルク空港 (NUE)", country: "ドイツ", lat: 49.4987, lng: 11.0669 },
             { name: "デュッセルドルフ空港 (DUS)", country: "ドイツ", lat: 51.2894, lng: 6.7668 },
             { name: "アムステルダム・スキポール空港 (AMS)", country: "オランダ", lat: 52.3105, lng: 4.7683 },
@@ -239,7 +239,7 @@
             { name: "ポートランド国際空港 (PDX)", country: "アメリカ", lat: 45.5898, lng: -122.5951 },
             { name: "ワシントン・ダレス国際空港 (IAD)", country: "アメリカ", lat: 38.9445, lng: -77.4558 },
             { name: "ジェネラル・ローガン国際空港 / ボストン (BOS)", country: "アメリカ", lat: 42.3656, lng: -71.0096 },
-            { name: "ラスベgas・ハリー・リード国際空港 (LAS)", country: "アメリカ", lat: 36.0801, lng: -115.1522 },
+            { name: "ラスベガス・ハリー・リード国際空港 (LAS)", country: "アメリカ", lat: 36.0801, lng: -115.1522 },
             { name: "ホノルル / ダニエル・K・イノウエ国際空港 (HNL)", country: "アメリカ", lat: 21.3245, lng: -157.9251 },
             { name: "テッド・スティーブンス・アンカレジ国際空港 (ANC)", country: "アメリカ", lat: 61.1744, lng: -149.9964 },
             { name: "バンクーバー国際空港 (YVR)", country: "カナダ", lat: 49.1967, lng: -123.1815 },
@@ -291,36 +291,45 @@
             { name: "コトカ国際空港 / アクラ (ACC)", country: "ガーナ", lat: 5.6051, lng: -0.1668 }
         ];
 
-        // 2D描画用キャンバス
+        // 1. 陸地テクスチャ用の2Dキャンバス
         const viewCanvas = document.createElement('canvas');
         viewCanvas.width = 4096;
         viewCanvas.height = 2048;
         const vCtx = viewCanvas.getContext('2d');
 
-        // 裏の判定シールド専用キャンバス
+        // 2. 判定用の完全隠し2Dキャンバス（高精度UVピッキング専用）
         const pickCanvas = document.createElement('canvas');
         pickCanvas.width = 4096;
         pickCanvas.height = 2048;
         const pCtx = pickCanvas.getContext('2d', { willReadFrequently: true });
 
         const colorToCountryMap = {};
-
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
-        const globeTexture = new THREE.CanvasTexture(viewCanvas);
-        
-        // ★海のマテリアル設定：ご指定のライトグレー（0xdddddd）に設定、透明度0.6
-        const globeMaterial = new THREE.MeshBasicMaterial({ 
+
+        // ★解決：1層目「土台となる海球体」を独立させて単独で配置
+        // 色をライトグレー（0xdddddd）、不透明度0.6に設定。これで確実に「海」の色が出現します。
+        const seaMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xdddddd,       
             transparent: true, 
-            opacity: 0.6,  
-            map: globeTexture, 
-            side: THREE.DoubleSide, 
-            depthWrite: true       
+            opacity: 0.6,
+            side: THREE.DoubleSide,
+            depthWrite: true
         });
-        const globeMesh = new THREE.Mesh(globeGeometry, globeMaterial);
-        globeMesh.userData = { type: 'globe' };
-        globeMesh.renderOrder = 1; 
-        globeGroup.add(globeMesh);
+        const seaMesh = new THREE.Mesh(globeGeometry, seaMaterial);
+        seaMesh.renderOrder = 1;
+        globeGroup.add(seaMesh);
+
+        // ★解決：2層目「陸地テクスチャを貼るためだけの透明な球体」を外側に重ねる
+        const globeTexture = new THREE.CanvasTexture(viewCanvas);
+        const landMaterial = new THREE.MeshBasicMaterial({ 
+            map: globeTexture,
+            transparent: true, // 海（1層目）が見えるように透過をON
+            side: THREE.DoubleSide, 
+            depthWrite: false       
+        });
+        const landMesh = new THREE.Mesh(globeGeometry, landMaterial);
+        landMesh.renderOrder = 2; 
+        globeGroup.add(landMesh);
 
         // カラーピッキング用の透明な判定用メッシュ
         const pickMesh = new THREE.Mesh(globeGeometry, new THREE.MeshBasicMaterial({ visible: false }));
@@ -413,7 +422,7 @@
             });
 
         function drawDualCanvasPolygon(polygon, colorKey) {
-            // ★陸地用キャンバス：ご指定の重厚な「ネイビー（#111e46）」で綺麗に塗りつぶし
+            // 1. 陸地用キャンバス：ご指定の深みのある「ネイビー（#111e46）」でしっかり塗りつぶし
             vCtx.fillStyle = "#111e46";
             vCtx.beginPath();
             const outerRing = polygon[0];
@@ -426,7 +435,7 @@
             vCtx.closePath();
             vCtx.fill();
 
-            // 裏判定用キャンバス
+            // 2. 裏の判定シールド用キャンバス
             pCtx.fillStyle = colorKey;
             pCtx.beginPath();
             if(pStart) pCtx.moveTo(pStart.x, pStart.y);
@@ -491,12 +500,12 @@
             const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
             
             const normalLine = new THREE.Line(lineGeometry, normalLineMaterial);
-            normalLine.renderOrder = 2; 
+            normalLine.renderOrder = 3; 
             globeGroup.add(normalLine);
 
             const highMat = highlightLineMaterial.clone();
             const highlightLine = new THREE.Line(lineGeometry, highMat);
-            highlightLine.renderOrder = 3; 
+            highlightLine.renderOrder = 4; 
             highlightLine.userData = { name: name };
             globeGroup.add(highlightLine);
 
@@ -512,7 +521,7 @@
             const pos = latLngToVector3(airport.lat, airport.lng, RADIUS + 0.25);
             pin.position.copy(pos);
             pin.userData = { type: 'airport', name: airport.name, country: airport.country };
-            pin.renderOrder = 4; 
+            pin.renderOrder = 5; 
             globeGroup.add(pin);
             pins.push(pin);
         });
@@ -525,7 +534,7 @@
 
         window.addEventListener('mousedown', (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; });
         
-        // 高精度UVピッキング（すり抜け・裏側誤爆完全対応）
+        // 高精度UVピッキング（島国すり抜け・裏側誤爆を完全に解決したシールド判定）
         window.addEventListener('mousemove', (e) => {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
