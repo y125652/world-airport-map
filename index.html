@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Pure Vector Globe (Perfect UV Picking Edition)</title>
+    <title>3D Pure Vector Globe (Navy Land & Grey Sea Edition)</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #ffffff; 
+            background-color: #ffffff; /* ★宇宙（背景）を白に設定 */
             font-family: Arial, sans-serif;
             user-select: none;
         }
@@ -106,7 +106,7 @@
         const RADIUS = 70;
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xffffff); 
+        scene.background = new THREE.Color(0xffffff); // ★宇宙（背景）を白に固定
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -239,7 +239,7 @@
             { name: "ポートランド国際空港 (PDX)", country: "アメリカ", lat: 45.5898, lng: -122.5951 },
             { name: "ワシントン・ダレス国際空港 (IAD)", country: "アメリカ", lat: 38.9445, lng: -77.4558 },
             { name: "ジェネラル・ローガン国際空港 / ボストン (BOS)", country: "アメリカ", lat: 42.3656, lng: -71.0096 },
-            { name: "ラスベガス・ハリー・リード国際空港 (LAS)", country: "アメリカ", lat: 36.0801, lng: -115.1522 },
+            { name: "ラスベgas・ハリー・リード国際空港 (LAS)", country: "アメリカ", lat: 36.0801, lng: -115.1522 },
             { name: "ホノルル / ダニエル・K・イノウエ国際空港 (HNL)", country: "アメリカ", lat: 21.3245, lng: -157.9251 },
             { name: "テッド・スティーブンス・アンカレジ国際空港 (ANC)", country: "アメリカ", lat: 61.1744, lng: -149.9964 },
             { name: "バンクーバー国際空港 (YVR)", country: "カナダ", lat: 49.1967, lng: -123.1815 },
@@ -253,7 +253,7 @@
             { name: "グアダラハラ国際空港 (GDL)", country: "メキシコ", lat: 20.5218, lng: -103.3111 },
             { name: "トクメン国際空港 (PTY)", country: "パナマ", lat: 9.0714, lng: -79.3835 },
             { name: "エルドラド国際空港 (BOG)", country: "コロンビア", lat: 4.7016, lng: -74.1469 },
-            { name: "ホル旧・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
+            { name: "ホルヘ・チャベス国際空港 (LIM)", country: "ペルー", lat: -12.0219, lng: -77.1143 },
             { name: "グアルーリョス国際空港 (GRU)", country: "ブラジル", lat: -23.4356, lng: -46.4731 },
             { name: "アントニオ・カルロス・ジョビン国際空港 (GIG)", country: "ブラジル", lat: -22.8100, lng: -43.2506 },
             { name: "ミニストロ・ピスタリーニ国際空港 (EZE)", country: "アルゼンチン", lat: -34.8222, lng: -58.5358 },
@@ -291,14 +291,13 @@
             { name: "コトカ国際空港 / アクラ (ACC)", country: "ガーナ", lat: 5.6051, lng: -0.1668 }
         ];
 
-        // 1. 表面表示用のキャンバス（グレーの陸地用）
+        // 2D描画用キャンバス
         const viewCanvas = document.createElement('canvas');
         viewCanvas.width = 4096;
         viewCanvas.height = 2048;
         const vCtx = viewCanvas.getContext('2d');
 
-        // 2. ★超重要：判定（クリック・ホバー）専用の完全非表示キャンバス（インデックスカラー用）
-        // これを設置することで、表面のグレー塗装に邪魔されず、100%正確な国名ピッキングが可能になります
+        // 裏の判定シールド専用キャンバス
         const pickCanvas = document.createElement('canvas');
         pickCanvas.width = 4096;
         pickCanvas.height = 2048;
@@ -309,7 +308,7 @@
         const globeGeometry = new THREE.SphereGeometry(RADIUS, 64, 64);
         const globeTexture = new THREE.CanvasTexture(viewCanvas);
         
-        // 海のカラー調整：ライトグレー（0xdddddd）で透明度 0.6
+        // ★海のマテリアル設定：ご指定のライトグレー（0xdddddd）に設定、透明度0.6
         const globeMaterial = new THREE.MeshBasicMaterial({ 
             color: 0xdddddd,       
             transparent: true, 
@@ -413,10 +412,9 @@
                 globeTexture.needsUpdate = true;
             });
 
-        // 表面のグレー塗りと裏面のカラーコード塗りを2つのキャンバスに同時に書き込む
         function drawDualCanvasPolygon(polygon, colorKey) {
-            // 1. 表面用（グレー）
-            vCtx.fillStyle = "#bbbbbb";
+            // ★陸地用キャンバス：ご指定の重厚な「ネイビー（#111e46）」で綺麗に塗りつぶし
+            vCtx.fillStyle = "#111e46";
             vCtx.beginPath();
             const outerRing = polygon[0];
             let pStart = lngLatToCanvas(outerRing[0][0], outerRing[0][1]);
@@ -428,7 +426,7 @@
             vCtx.closePath();
             vCtx.fill();
 
-            // 2. 裏の判定用（インデックスカラー）
+            // 裏判定用キャンバス
             pCtx.fillStyle = colorKey;
             pCtx.beginPath();
             if(pStart) pCtx.moveTo(pStart.x, pStart.y);
@@ -439,7 +437,7 @@
             pCtx.closePath();
             pCtx.fill();
 
-            // くり抜き処理（湖など）
+            // 湖のくり抜き
             if (polygon.length > 1) {
                 vCtx.globalCompositeOperation = 'destination-out';
                 pCtx.globalCompositeOperation = 'destination-out';
@@ -527,8 +525,7 @@
 
         window.addEventListener('mousedown', (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; });
         
-        // ★大改修：ホバーイベントを「3D線交差」から「高精度UVピッキング」に全面刷新！
-        // これにより、島国すり抜けバグと地球裏側の誤爆バグが100%完全に消滅します。
+        // 高精度UVピッキング（すり抜け・裏側誤爆完全対応）
         window.addEventListener('mousemove', (e) => {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -552,21 +549,17 @@
 
             let currentHoveredCountryName = null;
             let currentHoveredCountryCode = null;
-            
-            // 手前の球体表面（pickMesh）のみをレーザー判定
             const globeIntersects = raycaster.intersectObject(pickMesh);
 
             if (globeIntersects.length > 0 && !isHoveringAirport) {
                 const hit = globeIntersects[0];
                 if (hit.uv) {
-                    // 3D表面の住所から2Dキャンバスの正確なピクセル位置を計算
                     const x = Math.floor(hit.uv.x * pickCanvas.width);
                     const y = Math.floor((1.0 - hit.uv.y) * pickCanvas.height);
                     
-                    // 裏に隠した判定専用キャンバスからインデックス色を取得（手前しか吸い取りません）
                     const pixel = pCtx.getImageData(x, y, 1, 1).data;
                     
-                    if (pixel[3] > 0) { // 透明じゃない（＝陸地）
+                    if (pixel[3] > 0) { 
                         const colorKey = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
                         const countryInfo = colorToCountryMap[colorKey];
                         if (countryInfo) {
@@ -582,7 +575,6 @@
                 currentUnderMouseCountry = null;
             }
 
-            // バイオレットのネオンライトアップ処理
             if (currentHoveredCountryName !== lastHoveredCountryName) {
                 allCountryLines.forEach(line => {
                     if (line.userData.name === lastHoveredCountryName && line.userData.name !== activeSelectedCountryName) {
@@ -604,7 +596,6 @@
                 labelEl.innerHTML = `<strong>${currentHoveredCountryName}${codeDisplay}</strong>`;
             }
 
-            // 地球のドラッグ回転処理
             if (!isDragging) return;
             const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
             globeGroup.rotation.y += deltaMove.x * 0.002; 
